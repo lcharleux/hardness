@@ -76,12 +76,60 @@ def conical_indenter_mesh_2D(gmsh_path, workdir, psi= 70.29, r1 = 1., r2 = 10., 
   mesh.nodes.add_set_by_func("REF_NODE", lambda x, y, z, labels: ((x == 0.) * (y == y.max())) == True )      
   return mesh  
   
+def spheroconical_indenter_mesh_2D(gmsh_path, workdir, psi= 70.29, R = 1., r1 = 1., r2 = 10., r3 = 100., lc1 = 0.1, lc2 = 20., rigid = False, geoPath = "spheroconical_indenter_2D"):
+  """
+  Builds a spheroconical indenter mesh.
+  """
+  # Some high lvl maths...
+  psi = np.radians(psi)
+  x2 = R  * np.cos(psi)
+  y2 = R  * (1. - np.sin(psi))
+  x3 = r3 * np.sin(psi)
+  dh = R * (1. / np.sin(psi) - 1.)
+  y3 = r3 * np.cos(psi) - dh
+  y4 = r3 - dh
+  y5 = R 
+  y6 = -dh
+  # Template filling  
+  geo = open(MODPATH + "/templates/models/spheroconical_indenter_mesh_2D.geo").read()
+  geo = geo.replace("#LC1", str(lc1))
+  geo = geo.replace("#LC2", str(lc2))
+  geo = geo.replace("#R1",  str(r1))
+  geo = geo.replace("#R2",  str(r2))
+  geo = geo.replace("#X2",  str(x2))
+  geo = geo.replace("#Y2",  str(y2))
+  geo = geo.replace("#X3",  str(x3))
+  geo = geo.replace("#Y3",  str(y3))
+  geo = geo.replace("#Y4",  str(y4))
+  geo = geo.replace("#Y5",  str(y5))
+  geo = geo.replace("#Y6",  str(y6))
   
-def indentation_input(sample_mesh, indenter_mesh, path = None, element_map = None):
+  open(workdir + geoPath + ".geo", "w").write(geo)
+  p = subprocess.Popen("{0} -2 {1}".format(gmsh_path, geoPath + ".geo"), cwd = workdir, shell=True, stdout = subprocess.PIPE)
+  trash = p.communicate()
+  mesh = Mesh.read_msh(workdir + geoPath + ".msh")
+  mesh.element_set_to_node_set(tag = "SURFACE")
+  mesh.element_set_to_node_set(tag = "BOTTOM")
+  mesh.element_set_to_node_set(tag = "AXIS")
+  del mesh.elements.sets["SURFACE"]
+  del mesh.elements.sets["BOTTOM"]
+  del mesh.elements.sets["AXIS"]
+  mesh.elements.data = mesh.elements.data[mesh.elements.data.etype != "Line2"] 
+  mesh.node_set_to_surface("SURFACE")
+  if rigid == False:
+    mesh.nodes.add_set("RIGID_NODES", mesh.nodes.sets["BOTTOM"]) 
+  else:
+    mesh.nodes.add_set("RIGID_NODES", mesh.nodes.sets["ALL_ELEMENTS"])
+  mesh.nodes.add_set_by_func("TIP_NODE", lambda x, y, z, labels: ((x == 0.) * (y == 0.)) == True )
+  mesh.nodes.add_set_by_func("REF_NODE", lambda x, y, z, labels: ((x == 0.) * (y == y.max())) == True )      
+  return mesh    
+  
+  
+def indentation_2D_input(sample_mesh, indenter_mesh, path = None, element_map = None):
   """
   Returns a indentation INP file.
   """
-  pattern = open(MODPATH + "/templates/models/indentation.inp").read()
+  pattern = open(MODPATH + "/templates/models/indentation_2D/indentation_2D.inp").read()
   if element_map == None:
     element_map = {"Tri3":  "CAX3", 
                    "Quad4": "CAX4", }

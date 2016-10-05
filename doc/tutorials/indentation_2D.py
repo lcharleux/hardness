@@ -10,22 +10,23 @@ sample_mesh = hd.models.sample_mesh_2D("gmsh",
                                    lx = 1., 
                                    ly = 1., 
                                    r1 = 2., 
-                                   r2 = 1000., 
+                                   r2 = 100., 
                                    Nx = 32, 
                                    Ny = 16, 
-                                   lc1 = 0.08, 
-                                   lc2 = 200.)
+                                   lc1 = 0.2, 
+                                   lc2 = 20.)
                                    
-indenter_mesh = hd.models.conical_indenter_mesh_2D("gmsh", 
+indenter_mesh = hd.models.spheroconical_indenter_mesh_2D("gmsh", 
                                    workdir, 
-                                   psi= 70.29, 
+                                   R = 1.,
+                                   psi= 30., 
                                    r1 = 1., 
                                    r2 = 100., 
                                    r3 = 100., 
-                                   lc1 = 0.08, 
+                                   lc1 = 0.1, 
                                    lc2 = 20.)
                                    
-hd.models.indentation_input(sample_mesh   = sample_mesh,
+hd.models.indentation_2D_input(sample_mesh   = sample_mesh,
                             indenter_mesh = indenter_mesh, 
                             path = workdir + simName + ".inp")
                                       
