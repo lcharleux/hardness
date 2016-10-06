@@ -32,11 +32,7 @@ hd.models.indentation_2D_input(sample_mesh   = sample_mesh,
                                       
 hd.postproc.indentation_abqpostproc(
         workdir     =  workdir, 
-        path        = simName + "_abqpostproc.py", 
-        odbPath     = simName + ".odb", 
-        histPath    = simName + "_hist", 
-        contactPath = simName + "_contact", 
-        fieldPath   = simName + "_fields")
+        odbPath     = simName)
         
 hd.postproc.indentation_pypostproc(
         workdir     =  workdir, 

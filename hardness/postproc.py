@@ -8,16 +8,13 @@ import os, subprocess, inspect
 import hardness
 MODPATH = os.path.dirname(inspect.getfile(hardness))
 
-def indentation_abqpostproc(workdir, path, odbPath, histPath, contactPath, fieldPath):
+def indentation_abqpostproc(workdir, odbPath):
   """
   Writes the abqpostproc file in the workdir.
   """
   pattern = open(MODPATH + "/templates/postproc/abqpostproc.py").read()
   pattern = pattern.replace("#ODBPATH",     odbPath)
-  pattern = pattern.replace("#HISTPATH",    histPath)
-  pattern = pattern.replace("#CONTACTPATH", contactPath)
-  pattern = pattern.replace("#FIELDPATH",   fieldPath)
-  open(workdir + path, "wb").write(pattern)
+  open(workdir + odbPath + "_abqpostproc.py", "wb").write(pattern)
       
 def indentation_pypostproc(path, workdir, histPath, contactPath, fieldPath):
   """
