@@ -16,12 +16,10 @@ def indentation_abqpostproc(workdir, odbPath):
   pattern = pattern.replace("#ODBPATH",     odbPath)
   open(workdir + odbPath + "_abqpostproc.py", "wb").write(pattern)
       
-def indentation_pypostproc(path, workdir, histPath, contactPath, fieldPath):
+def indentation_pypostproc(workdir, odbPath):
   """
   Writes the pypostproc file in the workdir.
   """
   pattern = open(MODPATH + "/templates/postproc/pypostproc.py").read() 
-  pattern = pattern.replace("#HISTPATH",    histPath + ".rpt")
-  pattern = pattern.replace("#CONTACTPATH", contactPath + ".rpt")
-  pattern = pattern.replace("#FIELDPATH",   fieldPath + ".rpt")
-  open(workdir + path, "wb").write(pattern)     
+  pattern = pattern.replace("#ODBPATH",    odbPath)
+  open(workdir + odbPath + "_pypostproc.py", "wb").write(pattern)     

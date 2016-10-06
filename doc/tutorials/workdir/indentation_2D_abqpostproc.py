@@ -8,11 +8,17 @@ import __main__
 # SETTINGS
 odbPath     = "indentation_2D"
 
+
 # REPORT FOLDER SETUP
 try:
   os.mkdir("reports")
 except:
   pass  
+files2delete = os.listdir("reports/")
+files2delete = [f for f in files2delete if f [-5:] in [".hrpt", ".frpt"]]
+for f in files2delete:
+  os.remove("reports/"+f)
+
 
 # DATABASE SETUP
 o1 = session.openOdb(name = odbPath + ".odb")
@@ -44,7 +50,7 @@ if job_completed:
                   steps = stepKeys)
           for key, value in contDict.iteritems()] 
  
-  session.writeXYReport(fileName="reports/" + odbPath + "_contact.rpt", 
+  session.writeXYReport(fileName="reports/" + odbPath + "_contact.hrpt", 
                         xyData = contData)
   
    
@@ -69,7 +75,7 @@ if job_completed:
                   steps = stepKeys)
           for key, value in histDict.iteritems()] 
  
-  session.writeXYReport(fileName="reports/" + odbPath + "_hist.rpt", 
+  session.writeXYReport(fileName="reports/" + odbPath + "_hist.hrpt", 
                         xyData = histData)
 
 
@@ -89,8 +95,6 @@ if job_completed:
                     )),)
            }
   
-  
-  
   for instance in instances:
     leaf = dgo.LeafFromPartInstance(partInstanceName = instance)
     session.viewports['Viewport: 1'].odbDisplay.displayGroup.replace(leaf=leaf)
@@ -102,7 +106,7 @@ if job_completed:
         frame = frames[frameNum]
         for fieldKey, field in fields.iteritems():
           session.writeFieldReport(
-                fileName       = "reports/{0}_instance={1}_step={2}_frame={3}_var={4}.rpt".format(
+                fileName       = "reports/{0}_instance-{1}_step-{2}_frame-{3}_var-{4}.frpt".format(
                     odbPath,
                     instance,     
                     stepKey,

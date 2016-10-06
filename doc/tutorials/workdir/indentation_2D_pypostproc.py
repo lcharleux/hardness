@@ -1,18 +1,35 @@
 import pandas as pd
 import numpy as np
+import os
+from argiope.abq.pypostproc import read_field_report as rfr
+from argiope.mesh import read_h5, Field, write_xdmf
 
-histPath    = "indentation_2D_hist.rpt"
-contactPath = "indentation_2D_contact.rpt"
-fieldPath   = "indentation_2D_fields.rpt"
+odbPath= "indentation_2D"
+indenter_mesh = read_h5("outputs/{0}_indenter_mesh.h5".format(odbPath))
+sample_mesh   = read_h5("outputs/{0}_sample_mesh.h5".format(odbPath))
 
+
+# FILES LISTING
+files = os.listdir("reports/")
+
+for path in files:
 #HISTORY OUTPUTS
-hist = pd.read_csv(histPath, delim_whitespace = True,)
-X = np.array(hist.X)
-step = np.zeros_like(X).astype(np.int32)
 
-for i in xrange(1, len(X)):
-  step[i] = step[i-1]  
-  if X[i] == X[i-1]:
-    step[i] += 1
-hist.to_csv(histPath[:-4] + ".csv")
+# FIELD OUTPUTS
+  if path.endswith(".frpt"):
+    print "#LOADING: " + path
+    instance = path.split("instance")[1][1:].split("_step-")[0]
+    info = {"tag": path[:-5], "position": "Nodal"}
+    data = rfr("reports/" + path)
+    field = Field(info, data)
+    if instance == "I_INDENTER":
+      indenter_mesh.add_field(tag = info["tag"], field = field)
+    elif instance == "I_SAMPLE":
+      sample_mesh.add_field(tag = info["tag"], field = field) 
+   
+indenter_mesh.save()
+sample_mesh.save()
+write_xdmf(sample_mesh,
+           "outputs/{0}_sample_mesh.xdmf".format(odbPath), 
+           dataformat = "XML")
 
