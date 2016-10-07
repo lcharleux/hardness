@@ -21,21 +21,21 @@ sample_mesh = hd.models.sample_mesh_2D("gmsh",
                                    lx = 1., 
                                    ly = 1., 
                                    r1 = 2., 
-                                   r2 = 10., 
-                                   Nx = 4, 
-                                   Ny = 4, 
-                                   lc1 = .25, 
-                                   lc2 = 2.)
+                                   r2 = 100., 
+                                   Nx = 32, 
+                                   Ny = 16, 
+                                   lc1 = 0.2, 
+                                   lc2 = 20.)
                                    
 indenter_mesh = hd.models.spheroconical_indenter_mesh_2D("gmsh", 
                                    workdir, 
                                    R = 1.,
                                    psi= 30., 
                                    r1 = 1., 
-                                   r2 = 10., 
-                                   r3 = 10., 
-                                   lc1 = 0.25, 
-                                   lc2 = 2.)
+                                   r2 = 100., 
+                                   r3 = 100., 
+                                   lc1 = 0.1, 
+                                   lc2 = 20.)
 
 sample_mesh.save(h5path = workdir + outputdir + simName + "_sample_mesh.h5")
 indenter_mesh.save(h5path = workdir + outputdir + simName + "_indenter_mesh.h5")     

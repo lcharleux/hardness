@@ -32,4 +32,7 @@ sample_mesh.save()
 write_xdmf(sample_mesh,
            "outputs/{0}_sample_mesh.xdmf".format(odbPath), 
            dataformat = "XML")
+write_xdmf(indenter_mesh,
+           "outputs/{0}_indenter_mesh.xdmf".format(odbPath), 
+           dataformat = "XML")           
 

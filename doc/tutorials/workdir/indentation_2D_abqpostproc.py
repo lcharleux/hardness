@@ -92,7 +92,13 @@ if job_completed:
                       (COMPONENT, 'S22'), 
                       (COMPONENT, 'S33'), 
                       (COMPONENT, 'S12'), 
-                    )),)
+                    )),),
+            "U":  
+                  (('U', NODAL, 
+                      ((COMPONENT, 'U1'),  
+                      (COMPONENT, 'U2'), 
+                                           
+                    )),)        
            }
   
   for instance in instances:
