@@ -1,12 +1,12 @@
 ********************************************************************************
-Field Output Report, written Thu Oct 13 14:58:57 2016
+Field Output Report, written Thu Oct 13 14:58:58 2016
 
 Source 1
 ---------
 
    ODB: /home/lcharleux/Documents/Programmation/Python/Modules/hardness/doc/tutorials/workdir/indentation_2D.odb
-   Step: LOADING1
-   Frame: Increment    100: Step Time =    1.000
+   Step: UNLOADING1
+   Frame: Increment      0: Step Time =    0.000
 
 Loc 1 : Nodal values from source 1
 

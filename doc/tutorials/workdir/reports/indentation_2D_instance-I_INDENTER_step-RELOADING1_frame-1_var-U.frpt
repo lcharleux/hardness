@@ -5,8 +5,8 @@ Source 1
 ---------
 
    ODB: /home/lcharleux/Documents/Programmation/Python/Modules/hardness/doc/tutorials/workdir/indentation_2D.odb
-   Step: LOADING2
-   Frame: Increment      0: Step Time =    0.000
+   Step: RELOADING1
+   Frame: Increment     50: Step Time =    1.000
 
 Loc 1 : Nodal values from source 1
 

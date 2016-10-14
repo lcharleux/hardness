@@ -1,13 +1,13 @@
 // SETTINGS
-lx = #LX;
-ly = #LY;
-r1 = #R1;
-r2 = #R2;
-Nx = #NX;
-Ny = #NY;
+lx = $lx;
+ly = $ly;
+r1 = $r1;
+r2 = $r2;
+Nx = $Nx;
+Ny = $Ny;
 lc0 = ly/Ny;
-lc1 = #LC1;
-lc2 = #LC2;
+lc1 = $lc1;
+lc2 = $lc2;
 
 Point(1) = {0.,  0., 0., lc0};
 Point(2) = {0,  -ly, 0., lc0};

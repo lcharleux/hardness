@@ -1,22 +1,22 @@
 // SETTINGS
-r1 =  #R1;
-r2 =  #R2;
-lc1 = #LC1;
-lc2 = #LC2;
+r1 =  $r1;
+r2 =  $r2;
+lc1 = $lc1;
+lc2 = $lc2;
 
 Point(1) = {0. ,  0. , 0., lc1};
-Point(2) = {#X2,  #Y2, 0., lc2};
-Point(3) = {#X3,  #Y3, 0., lc2};
-Point(4) = {0. ,  #Y4, 0., lc2};
-Point(5) = {0. ,  #Y5, 0., lc2};
-Point(6) = {0. ,  #Y6, 0., lc2};
+Point(2) = {$x2,  $y2, 0., lc2};
+Point(3) = {$x3,  $y3, 0., lc2};
+Point(4) = {0. ,  $y4, 0., lc2};
+Point(5) = {0. ,  $y5, 0., lc2};
+Point(6) = {0. ,  $y6, 0., lc2};
 
 
 Circle(1) = {1,5,2};
-Line(2)   = {2,3};
+Line(2) = {2,3};
 Circle(3) = {3,6,4};
-Line(4)   = {4,1};
-Line Loop(1)  = {1,2,3,4};
+Line(4) = {4,1};
+Line Loop(1) = {1,2,3,4};
 Plane Surface(1) = {1};
 
 Field[1] = Attractor;

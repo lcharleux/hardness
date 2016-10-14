@@ -6,7 +6,7 @@ import displayGroupOdbToolset as dgo
 import __main__
 
 # SETTINGS
-odbPath     = "#ODBPATH"
+simName= "${simName}"
 
 
 # REPORT FOLDER SETUP
@@ -21,14 +21,14 @@ for f in files2delete:
 
 
 # DATABASE SETUP
-o1 = session.openOdb(name = odbPath + ".odb")
+o1 = session.openOdb(name = simName + ".odb")
 session.viewports['Viewport: 1'].setValues(displayedObject=o1)
 session.xyReportOptions.setValues(numDigits=9, numberFormat=SCIENTIFIC)
-odb = session.odbs[odbPath + ".odb"]
+odb = session.odbs[simName + ".odb"]
 
 # SIMULATION STATUS 
 job_completed = (odb.diagnosticData.jobStatus == JOB_STATUS_COMPLETED_SUCCESSFULLY)
-open(odbPath + "_completed.txt", "wb").write(str(job_completed))
+open(simName + "_completed.txt", "wb").write(str(job_completed))
 
 if job_completed:
   stepKeys = odb.steps.keys()
@@ -50,7 +50,7 @@ if job_completed:
                   steps = stepKeys)
           for key, value in contDict.iteritems()] 
  
-  session.writeXYReport(fileName="reports/" + odbPath + "_contact.hrpt", 
+  session.writeXYReport(fileName="reports/" + simName + "_contact.hrpt", 
                         xyData = contData)
   
    
@@ -63,7 +63,8 @@ if job_completed:
               "Wps" :"Plastic dissipation: ALLPD PI: I_SAMPLE in ELSET ALL_ELEMENTS",
               "Wei" :"Strain energy: ALLSE PI: I_INDENTER in ELSET ALL_ELEMENTS",
               "Wes" :"Strain energy: ALLSE PI: I_SAMPLE in ELSET ALL_ELEMENTS",
-              "F"   :"Reaction force: RF2 PI: I_INDENTER Node {0} in NSET REF_NODE".format(ref_node),
+              "RF"   :"Reaction force: RF2 PI: I_INDENTER Node {0} in NSET REF_NODE".format(ref_node),
+              "CF"   :"Point loads: CF2 PI: I_INDENTER Node {0} in NSET REF_NODE".format(ref_node),
               "dtip":"Spatial displacement: U2 PI: I_INDENTER Node {0} in NSET TIP_NODE".format(tip_node),
               "dtot":"Spatial displacement: U2 PI: I_INDENTER Node {0} in NSET REF_NODE".format(ref_node),   
              }
@@ -75,7 +76,7 @@ if job_completed:
                   steps = stepKeys)
           for key, value in histDict.iteritems()] 
  
-  session.writeXYReport(fileName="reports/" + odbPath + "_hist.hrpt", 
+  session.writeXYReport(fileName="reports/" + simName + "_hist.hrpt", 
                         xyData = histData)
 
 
@@ -113,7 +114,7 @@ if job_completed:
         for fieldKey, field in fields.iteritems():
           session.writeFieldReport(
                 fileName       = "reports/{0}_instance-{1}_step-{2}_frame-{3}_var-{4}.frpt".format(
-                    odbPath,
+                    simName,
                     instance,     
                     stepKey,
                     frameNum,

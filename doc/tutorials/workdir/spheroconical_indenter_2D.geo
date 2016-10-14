@@ -13,10 +13,10 @@ Point(6) = {0. ,  -1.0, 0., lc2};
 
 
 Circle(1) = {1,5,2};
-Line(2)   = {2,3};
+Line(2) = {2,3};
 Circle(3) = {3,6,4};
-Line(4)   = {4,1};
-Line Loop(1)  = {1,2,3,4};
+Line(4) = {4,1};
+Line Loop(1) = {1,2,3,4};
 Plane Surface(1) = {1};
 
 Field[1] = Attractor;

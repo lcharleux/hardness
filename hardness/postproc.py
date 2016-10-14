@@ -3,23 +3,26 @@ import pandas as pd
 from argiope import mesh as Mesh
 import argiope
 import os, subprocess, inspect
+from string import Template
 
 # PATH TO MODULE
 import hardness
 MODPATH = os.path.dirname(inspect.getfile(hardness))
 
-def indentation_abqpostproc(workdir, odbPath):
+def indentation_abqpostproc(workdir, simName):
   """
   Writes the abqpostproc file in the workdir.
   """
-  pattern = open(MODPATH + "/templates/postproc/abqpostproc.py").read()
-  pattern = pattern.replace("#ODBPATH",     odbPath)
-  open(workdir + odbPath + "_abqpostproc.py", "wb").write(pattern)
+  pattern = Template(
+        open(MODPATH + "/templates/models/indentation_2D/indentation_2D_abqpostproc.py").read())
+  pattern = pattern.substitute(simName = simName)
+  open(workdir + simName + "_abqpostproc.py", "wb").write(pattern)
       
-def indentation_pypostproc(workdir, odbPath):
+def indentation_pypostproc(workdir, simName):
   """
   Writes the pypostproc file in the workdir.
   """
-  pattern = open(MODPATH + "/templates/postproc/pypostproc.py").read() 
-  pattern = pattern.replace("#ODBPATH",    odbPath)
-  open(workdir + odbPath + "_pypostproc.py", "wb").write(pattern)     
+  pattern = Template(
+        open(MODPATH + "/templates/models/indentation_2D/indentation_2D_pypostproc.py").read()) 
+  pattern = pattern.substitute(simName = simName)
+  open(workdir + simName + "_pypostproc.py", "wb").write(pattern)     

@@ -1,13 +1,13 @@
 // SETTINGS
-r1 =  #R1;
-r2 =  #R2;
-lc1 = #LC1;
-lc2 = #LC2;
+r1 =  $r1;
+r2 =  $r2;
+lc1 = $lc1;
+lc2 = $lc2;
 
 
 Point(1) = {0. ,  0. , 0., lc1};
-Point(2) = {#X2,  #Y2, 0., lc2};
-Point(3) = {0. ,  #Y3, 0., lc2};
+Point(2) = {$x2,  $y2, 0., lc2};
+Point(3) = {0. ,  $y3, 0., lc2};
 
 Line(1)      = {1,2};
 Circle(2)    = {2,1,3};

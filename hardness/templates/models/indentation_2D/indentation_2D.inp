@@ -1,44 +1,45 @@
-**----------------------------------
+**------------------------------------------------------------------------------
 **INDENTATION SIMULATION
-**----------------------------------
+**------------------------------------------------------------------------------
 *HEADING
 Abapy Indentation Simulation
 *PREPRINT, ECHO=NO, MODEL=NO, HISTORY=NO, CONTACT=NO
-**----------------------------------
+**------------------------------------------------------------------------------
 ** SAMPLE DEFINITION
+**------------------------------------------------------------------------------
 *PART, NAME = P_SAMPLE
-#SAMPLE_MESH
+$SAMPLE_MESH
 *SOLID SECTION, ELSET = ALL_ELEMENTS, MATERIAL = SAMPLE_MAT
 *END PART
-**----------------------------------
+**------------------------------------------------------------------------------
 ** INDENTER DEFINITION
-**----------------------------------
+**------------------------------------------------------------------------------
 *PART, NAME = P_INDENTER
-#INDENTER_MESH
+$INDENTER_MESH
 *SOLID SECTION, ELSET = ALL_ELEMENTS, MATERIAL = INDENTER_MAT
 *RIGID BODY, REF NODE = REF_NODE, PIN NSET=RIGID_NODES
 *END PART
-**----------------------------------
+**------------------------------------------------------------------------------
 ** ASSEMBLY
-**----------------------------------
+**------------------------------------------------------------------------------
 *ASSEMBLY, NAME = ASSEMBLY
 *INSTANCE, NAME = I_SAMPLE, PART = P_SAMPLE
 *END INSTANCE
 *INSTANCE, NAME = I_INDENTER, PART= P_INDENTER
 *END INSTANCE
 *END ASSEMBLY
-**----------------------------------
+**------------------------------------------------------------------------------
 ** SURFACE INTERACTIONS
-**----------------------------------
+**------------------------------------------------------------------------------
 *SURFACE INTERACTION, NAME = SURF_INT
 *FRICTION
 0.0,
 *SURFACE BEHAVIOR, PRESSURE-OVERCLOSURE = HARD
 *CONTACT PAIR, INTERACTION = SURF_INT, SUPPLEMENTARY CONSTRAINTS = NO, TYPE= NODE TO SURFACE
 I_SAMPLE.SURFACE, I_INDENTER.SURFACE
-**----------------------------------
+**------------------------------------------------------------------------------
 ** MATERIALS
-**----------------------------------
+**------------------------------------------------------------------------------
 ** SAMPLE MATERIAL
 ** <VonMises instance: 1 samples>
 *MATERIAL, NAME=SAMPLE_MAT
@@ -51,84 +52,7 @@ I_SAMPLE.SURFACE, I_INDENTER.SURFACE
 *MATERIAL, NAME=INDENTER_MAT
 *ELASTIC
   1.0, 0.3
-**----------------------------------
+**------------------------------------------------------------------------------
 ** STEPS
-**----------------------------------
-*STEP, NAME = LOADING1, NLGEOM = YES, INC=1000000
-*STATIC, DIRECT
-0.02, 1.
-*BOUNDARY
-I_SAMPLE.AXIS, 1, 1
-I_SAMPLE.BOTTOM, 1, 3
-I_INDENTER.AXIS, 1, 1
-I_INDENTER.REF_NODE, 4, 6 
-I_INDENTER.REF_NODE, 2, 2, -0.166758329628
-*RESTART, WRITE, FREQUENCY = 0
-*OUTPUT, FIELD, FREQUENCY = 999999
-*NODE OUTPUT
-COORD, U, 
-*NODE OUTPUT, NSET=I_INDENTER.REF_NODE
-U
-*ELEMENT OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS, DIRECTIONS = YES
-LE, EE, PE, PEEQ, S, 
-*ELEMENT OUTPUT, ELSET=I_INDENTER.ALL_ELEMENTS, DIRECTIONS = YES
-LE, EE, PE, PEEQ, S, 
-*OUTPUT, HISTORY
-*ENERGY OUTPUT
-ALLFD, ALLWK
-*ENERGY OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS
-ALLPD
-*ENERGY OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS
-ALLSE
-*ENERGY OUTPUT, ELSET=I_INDENTER.ALL_ELEMENTS
-ALLSE
-*CONTACT OUTPUT, NSET=I_SAMPLE.SURFACE
-CPRESS
-*NODE OUTPUT, NSET=I_INDENTER.REF_NODE
-U2
-*NODE OUTPUT, NSET=I_INDENTER.TIP_NODE
-U2
-*NODE OUTPUT, NSET=I_INDENTER.REF_NODE
-RF2
-*NODE OUTPUT, NSET = I_SAMPLE.SURFACE
-COOR1, COOR2, COOR3
-*END STEP
-*STEP, NAME = LOADING2, NLGEOM = YES, INC=1000000
-*STATIC, DIRECT
-0.02, 1.
-*BOUNDARY
-I_SAMPLE.AXIS, 1, 1
-I_SAMPLE.BOTTOM, 1, 3
-I_INDENTER.AXIS, 1, 1
-I_INDENTER.REF_NODE, 4, 6 
-I_INDENTER.REF_NODE, 2, 2, 0.
-*RESTART, WRITE, FREQUENCY = 0
-*OUTPUT, FIELD, FREQUENCY = 999999
-*NODE OUTPUT
-COORD, U, 
-*NODE OUTPUT, NSET=I_INDENTER.REF_NODE
-U
-*ELEMENT OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS, DIRECTIONS = YES
-LE, EE, PE, PEEQ, S, 
-*ELEMENT OUTPUT, ELSET=I_INDENTER.ALL_ELEMENTS, DIRECTIONS = YES
-LE, EE, PE, PEEQ, S, 
-*OUTPUT, HISTORY
-*ENERGY OUTPUT
-ALLFD, ALLWK
-*ENERGY OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS
-ALLPD
-*ENERGY OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS
-ALLSE
-*ENERGY OUTPUT, ELSET=I_INDENTER.ALL_ELEMENTS
-ALLSE
-*CONTACT OUTPUT, NSET=I_SAMPLE.SURFACE
-CPRESS
-*NODE OUTPUT, NSET=I_INDENTER.REF_NODE
-U2
-*NODE OUTPUT, NSET=I_INDENTER.TIP_NODE
-U2
-*NODE OUTPUT, NSET=I_INDENTER.REF_NODE
-RF2
-*NODE OUTPUT, NSET = I_SAMPLE.SURFACE
-COOR1, COOR2, COOR3
-*END STEP
+**------------------------------------------------------------------------------
+$STEPS
