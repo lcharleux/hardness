@@ -18,13 +18,12 @@ for path in files:
 # FIELD OUTPUTS
   if path.endswith(".frpt"):
     print "#LOADING: " + path
-    #instance = path.split("instance")[1][1:].split("_step-")[0]
     sname, d    = path.split("_instance-")
     instance, d = d.split("_step-")
-    frame, d    = d.split("_frame-")
-    
-    
-    info = {"tag": path[:-5], "position": "Nodal"}
+    step, d    = d.split("_frame-")
+    frame, d    = d.split("_var-")
+    var, d    = d.split(".")
+    info = {"tag": "step-{0}_frame-{1}_var-{2}".format(step, frame, var), "position": "Nodal"}
     data = rfr("reports/" + path)
     field = Field(info, data)
     if instance == "I_INDENTER":

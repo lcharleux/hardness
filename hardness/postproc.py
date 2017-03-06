@@ -9,20 +9,21 @@ from string import Template
 import hardness
 MODPATH = os.path.dirname(inspect.getfile(hardness))
 
-def indentation_abqpostproc(workdir, simName):
+def indentation_abqpostproc(path, label, solver = "abaqus"):
   """
   Writes the abqpostproc file in the workdir.
   """
-  pattern = Template(
-        open(MODPATH + "/templates/models/indentation_2D/indentation_2D_abqpostproc.py").read())
-  pattern = pattern.substitute(simName = simName)
-  open(workdir + simName + "_abqpostproc.py", "wb").write(pattern)
+  if solver == "abaqus":
+    pattern = Template(
+          open(MODPATH + "/templates/models/indentation_2D/indentation_2D_abqpostproc.py").read())
+    pattern = pattern.substitute(simName = label)
+    open(path, "w").write(pattern)
       
-def indentation_pypostproc(workdir, simName):
+def indentation_pypostproc(path):
   """
   Writes the pypostproc file in the workdir.
   """
   pattern = Template(
         open(MODPATH + "/templates/models/indentation_2D/indentation_2D_pypostproc.py").read()) 
   pattern = pattern.substitute(simName = simName)
-  open(workdir + simName + "_pypostproc.py", "wb").write(pattern)     
+  open(path, "w").write(pattern)     

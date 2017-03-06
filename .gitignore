@@ -17,5 +17,12 @@
 *.sim
 *.sta
 *.pyc
-*.h5
-
+*.dat
+*.msg
+*.odb
+*.rpy*
+*.com
+*.prt
+*.sim
+*.sta
+*.pyc
