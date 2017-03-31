@@ -1,4 +1,5 @@
 import hardness as hd
+import argiope as ag
 import os, subprocess, time, local_settings
 
 #-------------------------------------------------------------------------------
@@ -26,83 +27,11 @@ create_dir(workdir)
 create_dir(workdir + outputdir)
 
 #-------------------------------------------------------------------------------
-# MODEL DEFINITION
-class Model:
-  """
-  Model meta class. 
-  
-  Note: should move Argiope as soon as it is working properly.
-  """
-  def __init__(self, 
-               label, 
-               meshes, 
-               steps, 
-               materials, 
-               solver = "abaqus", 
-               solver_path = "",
-               workdir = "./workdir",
-               verbose = True):
-    self.label        = label
-    self.meshes      = meshes
-    self.steps       = steps
-    self.materials   = materials
-    self.solver      = solver
-    self.solver_path = solver_path
-    self.workdir     = workdir
-    self.verbose = verbose
-   
-  def make_directories(self):
-    """
-    Checks if required directories exist and creates them if needed.
-    """
-    if os.path.isdir(self.workdir) == False: os.mkdir(self.workdir)
-  
-  def run_simulation(self):
-    """
-    Runs the simulation.
-    """
-    self.make_directories()
-    t0 = time.time()
-    if self.verbose: 
-      print('<Running "{0}" using {1}>'.format(self.label, 
-                                               self.solver))  
-    if self.solver == "abaqus":
-      command = '{0} job={1} input={1}.inp interactive ask_delete=OFF'.format(
-                self.solver_path, 
-                self.label) 
-      process = subprocess.Popen(command, 
-                                 cwd = self.workdir, 
-                                 shell=True, 
-                                 stdout = subprocess.PIPE)
-      trash = process.communicate()
-    t1 = time.time()
-    if self.verbose: 
-      print('<Ran {0}: duration {1:.2f}s>'.format(self.label, t1 - t0))   
-  
-  def run_postproc(self):
-    """
-    Runs the post-proc script.
-    """
-    t0 = time.time()
-    if self.verbose: 
-      print('<Post-Processing"{0}" using {1}>'.format(self.label, 
-                                               self.solver))  
-    if self.solver == "abaqus":
-      process = subprocess.Popen( 
-                [self.solver_path,  'viewer', 'noGUI={0}_abqpp.py'.format(
-                                                                   self.label)], 
-                cwd = self.workdir,
-                stdout = subprocess.PIPE )
-      trash = process.communicate()
-      print(trash)
-    t1 = time.time()
-    if self.verbose: 
-      print('<Post-Processed {0}: duration {1:.2f}s>'.format(self.label, 
-                                                                  t1 - t0)) 
+
                                                                   
                                                                   
                                                                   
-class Indentation2D(Model):
+class Indentation2D(ag.models.Model):
   """
   2D indentation class.
   """
@@ -167,28 +96,33 @@ indenter_mesh.save(h5path = workdir + outputdir + simName + "_indenter_mesh.h5")
 steps = [
         hd.models.indentation_2D_step_input(name = "LOADING1",
                                             control_type = "disp", 
-                                            duration = 1., 
-                                            nframes = 100,
+                                            duration = 1.,
+                                            kind = "adaptative",  
+                                            nframes = 50,
                                             controlled_value = -0.1),
         hd.models.indentation_2D_step_input(name = "UNLOADING1",
                                             control_type = "force", 
-                                            duration = 1., 
-                                            nframes = 100,
+                                            duration = 1.,
+                                            kind = "adaptative",  
+                                            nframes = 50,
                                             controlled_value = 0.),
         hd.models.indentation_2D_step_input(name = "RELOADING1",
                                             control_type = "disp", 
-                                            duration = 1., 
-                                            nframes = 100,
+                                            duration = 1.,
+                                            kind = "adaptative",  
+                                            nframes = 50,
                                             controlled_value = -0.1),
         hd.models.indentation_2D_step_input(name = "LOADING2",
                                             control_type = "disp", 
-                                            duration = 1., 
-                                            nframes = 100,
+                                            duration = 1.,
+                                            kind = "adaptative",  
+                                            nframes = 50,
                                             controlled_value = -0.2),                                    
         hd.models.indentation_2D_step_input(name = "UNLOADING2",
-                                            control_type = "disp", 
+                                            control_type = "force",
+                                            kind = "adaptative", 
                                             duration = 1., 
-                                            nframes = 100,
+                                            nframes = 50,
                                             controlled_value = 0.)
         ]                                                                                                  
 #-------------------------------------------------------------------------------

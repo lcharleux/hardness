@@ -9,14 +9,12 @@ Abapy Indentation Simulation
 **------------------------------------------------------------------------------
 *PART, NAME = P_SAMPLE
 $SAMPLE_MESH
-*SOLID SECTION, ELSET = ALL_ELEMENTS, MATERIAL = SAMPLE_MAT
 *END PART
 **------------------------------------------------------------------------------
 ** INDENTER DEFINITION
 **------------------------------------------------------------------------------
 *PART, NAME = P_INDENTER
 $INDENTER_MESH
-*SOLID SECTION, ELSET = ALL_ELEMENTS, MATERIAL = INDENTER_MAT
 *RIGID BODY, REF NODE = REF_NODE, PIN NSET=RIGID_NODES
 *END PART
 **------------------------------------------------------------------------------
@@ -40,18 +38,7 @@ I_SAMPLE.SURFACE, I_INDENTER.SURFACE
 **------------------------------------------------------------------------------
 ** MATERIALS
 **------------------------------------------------------------------------------
-** SAMPLE MATERIAL
-** <VonMises instance: 1 samples>
-*MATERIAL, NAME=SAMPLE_MAT
-*ELASTIC
-  1.0, 0.3
-*PLASTIC
-  0.01, 0.
-** INDENTER MATERIAL
-** <Elastic instance: 1 samples>
-*MATERIAL, NAME=INDENTER_MAT
-*ELASTIC
-  1.0, 0.3
+$MATERIALS
 **------------------------------------------------------------------------------
 ** STEPS
 **------------------------------------------------------------------------------
