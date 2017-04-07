@@ -13,7 +13,7 @@ MODPATH = os.path.dirname(inspect.getfile(hardness))
 ################################################################################
 # MODEL DEFINITION
 ################################################################################
-class Indentation2D(argiope.models.Model):
+class Indentation2D(argiope.models.Model, argiope.utils.Container):
   """
   2D indentation class.
   """
@@ -47,34 +47,42 @@ class Indentation2D(argiope.models.Model):
 ################################################################################
 # MESH PROCESSING
 ################################################################################
-def process_2D_mesh(mesh, element_map, material_map):
+def process_2D_sample_mesh(part):
   """
   Processes a 2D mesh, indenter or sample
   """
-  mesh.elements[("sets", "ALL_ELEMENTS", mesh._null)] = True
+  mesh = part.mesh
+  element_map = part.element_map
+  material_map = part.material_map
+  mesh.elements[("sets", "ALL_ELEMENTS", "")] = True
   mesh.nodes[("sets", "ALL_NODES")] = True
   mesh.element_set_to_node_set(tag = "SURFACE")
   mesh.element_set_to_node_set(tag = "BOTTOM")
   mesh.element_set_to_node_set(tag = "AXIS")
-  del mesh.elements[("sets", "SURFACE", "x")]
-  del mesh.elements[("sets", "BOTTOM", "x")]
-  del mesh.elements[("sets", "AXIS", "x")]
+  del mesh.elements[("sets", "SURFACE", "")]
+  del mesh.elements[("sets", "BOTTOM", "")]
+  del mesh.elements[("sets", "AXIS", "")]
   mesh.elements = mesh.elements.loc[mesh.space() == 2] 
   mesh.node_set_to_surface("SURFACE")
-  mesh = element_map(mesh)
-  mesh = material_map(mesh)
+  if element_map != None:
+    mesh = element_map(mesh)
+  if material_map != None:
+    mesh = material_map(mesh)
   return mesh                                      
 
 
-def process_2D_indenter(mesh, rigid = True, **kwargs):
+def process_2D_indenter_mesh(part):
   """
   Processes a raw gmsh 2D indenter mesh 
   """
-  mesh = process_2D_mesh(mesh, **kwargs)
+  mesh = part.mesh
+  element_map = part.element_map
+  material_map = part.material_map
+  mesh = process_2D_sample_mesh(part)
   x, y = mesh.nodes.coords.x.values, mesh.nodes.coords.y.values
   mesh.nodes[("sets","TIP_NODE")] = (x == 0) * (y == 0)
   mesh.nodes[("sets","REF_NODE")] = (x == 0) * (y == y.max())
-  if rigid == False:
+  if part.rigid == False:
     mesh.nodes.loc[:, ("sets", "RIGID_NODES")] = (
          mesh.nodes.sets["BOTTOM"])
   else: 
@@ -125,7 +133,7 @@ def sample_mesh_2D(gmsh_path = "gmsh",
 ################################################################################  
 
 
-
+'''
 def conical_indenter_mesh_2D(gmsh_path, workdir, psi= 70.29, 
                              r1 = 1., r2 = 10., r3 = 100., 
                              lc1 = 0.1, lc2 = 20., 
@@ -159,78 +167,84 @@ def conical_indenter_mesh_2D(gmsh_path, workdir, psi= 70.29,
                        cwd = workdir, shell=True, stdout = subprocess.PIPE)
   trash = p.communicate()
   return process_2D_indenter(mesh, **kwargs)
- 
+'''
+class Sample(argiope.models.Part):
+  pass
+   
+class Sample2D(Sample):
+  pass
 
-def spheroconical_indenter_mesh_2D(gmsh_path, workdir, psi= 70.29, R = 1., 
-                                   r1 = 1., r2 = 10., r3 = 100., 
-                                   lc1 = 0.1, lc2 = 20., 
-                                   geoPath = "spheroconical_indenter_2D", 
-                                   algorithm = "delquad", 
-                                   **kwargs):
+class Indenter(argiope.models.Part):
   """
-  Builds a spheroconical indenter mesh.
+  A generic indenter metaclass.
   """
-  # Some high lvl maths...
-  psi = np.radians(psi)
-  x2 = R  * np.cos(psi)
-  y2 = R  * (1. - np.sin(psi))
-  x3 = r3 * np.sin(psi)
-  dh = R * (1. / np.sin(psi) - 1.)
-  y3 = r3 * np.cos(psi) - dh
-  y4 = r3 - dh
-  y5 = R 
-  y6 = -dh
-  # Template filling  
-  geo = Template(
-        open(MODPATH + "/templates/models/indentation_2D/spheroconical_indenter_mesh_2D.geo").read())
-  geo = geo.substitute(
-     lc1 = lc1,
-     lc2 = lc2,
-     r1 = r1,
-     r2 = r2,
-     x2 = x2,
-     y2 = y2,
-     x3 = x3,
-     y3 = y3,
-     y4 = y4,
-     y5 = y5,
-     y6 = y6)
-  open(workdir + geoPath + ".geo", "w").write(geo)
-  p = subprocess.Popen("{0} -2 -algo {1} {2}".format(gmsh_path, 
-                                                     algorithm,
-                                                     geoPath + ".geo"), 
-                       cwd = workdir, shell=True, stdout = subprocess.PIPE)
-  trash = p.communicate()
-  mesh = argiope.mesh.read_msh(workdir + geoPath + ".msh")
+  def __init__(self, rigid = True, **kwargs):
+    self.rigid = rigid
+    super().__init__(**kwargs)
+
+class Indenter2D(Indenter):
   """
-  mesh.elements[("sets", "ALL_ELEMENTS", mesh._null)] = True
-  mesh.element_set_to_node_set(tag = "SURFACE")
-  mesh.element_set_to_node_set(tag = "BOTTOM")
-  mesh.element_set_to_node_set(tag = "AXIS")
-  mesh.elements.drop(("sets", "SURFACE", mesh._null), 1)
-  mesh.elements.drop(("sets", "BOTTOM", mesh._null), 1)
-  mesh.elements.drop(("sets", "AXIS", mesh._null), 1)
-  mesh.elements = mesh.elements.loc[mesh.space() == 2] 
-  mesh.node_set_to_surface("SURFACE")
-  if rigid == False:
-    mesh.nodes.loc[:, ("sets", "RIGID_NODES", mesh._null)] = (
-         mesh.nodes.sets["BOTTOM"])
-  else: 
-    mesh.nodes.loc[:, ("sets", "RIGID_NODES", mesh._null)] = (
-         mesh.nodes.sets["ALL_ELEMENTS"])
-  x, y = mesh.nodes.coords.x.values, mesh.nodes.coords.y.values
-  m.nodes[("sets","TIP_NODE")] = (x == 0) * (y == 0)
-  m.nodes[("sets","TIP_NODE")] = (x == 0) * (y == y.max())
-  if element_map == None: element_map = {"tri3": "CAX3", "quad4": "CAX4"}
-  for etype, group in mesh.elements.groupby((("type", "argiope", mesh._null),)):
-    if etype in element_map.keys():
-      mesh.elements.loc[group.index, ("type", "solver", 
-                                        mesh._null)] = element_map[etype]
-  # materials
-  mesh.elements.materials = "SAMPLE_MAT"  
-  return mesh
+  A generic 2D indenter metaclass.
   """
-  return process_2D_indenter(mesh, **kwargs)    
+  def postprocess_mesh(self):
+    self.mesh = process_2D_indenter_mesh(self)
+  
+class SpheroconicalIndenter2D(Indenter2D):
+  """
+  A spheroconical indenter class.
+  """
+  
+  def __init__(self, psi= 70.29, R = 1., 
+                     r1 = 1., r2 = 10., r3 = 100., 
+                     lc1 = 0.1, lc2 = 20.,
+                     **kwargs):
+    self.psi = psi
+    self.R = R
+    self.r1 = r1
+    self.r2 = r2
+    self.r3 = r3
+    self.lc1 = lc1
+    self.lc2 = lc2
+    super().__init__(**kwargs)
+  
+  def preprocess_mesh(self):                 
+    psi = self.psi
+    R = self.R
+    r1 = self.r1
+    r2 = self.r2
+    r3 = self.r3
+    lc1 = self.lc1
+    lc2 = self.lc2
+    # Some high lvl maths...
+    psi = np.radians(psi)
+    x2 = R  * np.cos(psi)
+    y2 = R  * (1. - np.sin(psi))
+    x3 = r3 * np.sin(psi)
+    dh = R * (1. / np.sin(psi) - 1.)
+    y3 = r3 * np.cos(psi) - dh
+    y4 = r3 - dh
+    y5 = R 
+    y6 = -dh
+    # Template filling  
+    geo = Template(
+          open(MODPATH + "/templates/models/indentation_2D/spheroconical_indenter_mesh_2D.geo").read())
+    geo = geo.substitute(
+       lc1 = lc1,
+       lc2 = lc2,
+       r1 = r1,
+       r2 = r2,
+       x2 = x2,
+       y2 = y2,
+       x3 = x3,
+       y3 = y3,
+       y4 = y4,
+       y5 = y5,
+       y6 = y6)
+    open(self.workdir + self.file_name + ".geo", "w").write(geo)
+  
+  
+  
+  
 
   
 ################################################################################

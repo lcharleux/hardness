@@ -4,6 +4,7 @@ from abaqusConstants import *
 import visualization, xyPlot
 import displayGroupOdbToolset as dgo
 import __main__
+from argiope.abq import abqpostproc
 
 # SETTINGS
 simName= "${simName}"
@@ -81,11 +82,6 @@ if job_completed:
 
 
   # FIELD OUTPUTS
-  nf = NumberFormat(numDigits=9, precision=0, format=SCIENTIFIC)
-  session.fieldReportOptions.setValues(
-          printTotal=OFF, 
-          printMinMax=OFF, 
-          numberFormat=nf)
   instances = ("I_SAMPLE", "I_INDENTER")
   fields = {"S":  
                   (('S', INTEGRATION_POINT, 
@@ -101,6 +97,33 @@ if job_completed:
                                            
                     )),)        
            }
+  for instance in instances:
+    for stepNum in xrange(len(stepKeys)):
+      stepKey = stepKeys[stepNum]
+      for fieldKey in fields.keys():
+        frameNum = -1
+        path = ("reports/{0}_instance-{1}_step-{2}_frame-{3}_var-{4}.frpt"
+                   .format(
+                      simName,
+                      instance,     
+                      stepKey,
+                      frameNum,
+                      fieldKey,))
+        abqpostproc.write_field_report(odb = odb,
+                                       path = path,
+                                       variable = fields[fieldKey],
+                                       instance = instance,
+                                       output_position = NODAL,
+                                       step = stepNum,
+                                       frame = frameNum)
+  """
+  nf = NumberFormat(numDigits=9, precision=0, format=SCIENTIFIC)
+  session.fieldReportOptions.setValues(
+          printTotal=OFF, 
+          printMinMax=OFF, 
+          numberFormat=nf)
+  
+  
   
   for instance in instances:
     leaf = dgo.LeafFromPartInstance(partInstanceName = instance)
@@ -126,5 +149,5 @@ if job_completed:
                 frame          = frameNum, 
                 outputPosition = NODAL, 
                 variable       = field)
-
+  """
 
