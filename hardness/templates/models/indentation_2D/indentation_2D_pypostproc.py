@@ -5,8 +5,8 @@ from argiope.abq.pypostproc import read_field_report as rfr
 from argiope.mesh import read_h5, Field, write_xdmf
 
 simName= "${simName}"
-indenter_mesh = read_h5("outputs/{0}_indenter_mesh.h5".format(simName))
-sample_mesh   = read_h5("outputs/{0}_sample_mesh.h5".format(simName))
+#indenter_mesh = read_h5("outputs/{0}_indenter_mesh.h5".format(simName))
+#sample_mesh   = read_h5("outputs/{0}_sample_mesh.h5".format(simName))
 
 
 # FILES LISTING

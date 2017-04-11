@@ -7,7 +7,7 @@ import __main__
 from argiope.abq import abqpostproc
 
 # SETTINGS
-simName= "${simName}"
+simName= "indentation_2D"
 
 
 # REPORT FOLDER SETUP
