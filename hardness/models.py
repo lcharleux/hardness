@@ -22,8 +22,8 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
     """
     Writes the input file in the chosen format.
     """
-    hardness.models.indentation_2D_input(sample_mesh = self.meshes["sample"],
-                                   indenter_mesh = self.meshes["indenter"],
+    hardness.models.indentation_2D_input(sample_mesh = self.parts["sample"],
+                                   indenter_mesh = self.parts["indenter"],
                                    steps = self.steps,
                                    materials = self.materials,
                                    solver = self.solver,
@@ -65,9 +65,9 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
        field = argiope.abq.pypostproc.read_field_report(
                            self.workdir + "reports/" + path)
        if field.part == "I_SAMPLE":
-         self.meshes["sample"].mesh.fields.append(field)
+         self.parts["sample"].mesh.fields.append(field)
        if field.part == "I_INDENTER":
-         self.meshes["indenter"].mesh.fields.append(field)
+         self.parts["indenter"].mesh.fields.append(field)
 ################################################################################
 # MESH PROCESSING
 ################################################################################
@@ -116,6 +116,7 @@ def process_2D_indenter_mesh(part):
 ################################################################################
 # SAMPLE MESH 2D
 ################################################################################
+'''
 def sample_mesh_2D(gmsh_path = "gmsh", 
                    workdir = "./", 
                    lx = 1., ly = 1., 
@@ -150,7 +151,7 @@ def sample_mesh_2D(gmsh_path = "gmsh",
   trash = p.communicate()
   mesh = argiope.mesh.read_msh(workdir + geoPath + ".msh")
   return process_2D_mesh(mesh, **kwargs)
-
+'''
 
 ################################################################################
 # PARTS
@@ -227,7 +228,8 @@ class Sample2D(Sample):
     q1 = (r2/r1)**(1./Nr) 
     lcx, lcy = lx / Nx, ly / Ny
     geo = Template(
-          open(MODPATH + "/templates/models/indentation_2D/indentation_mesh_2D.geo").read())
+          open(MODPATH + 
+          "/templates/models/indentation_2D/indentation_mesh_2D.geo").read())
     geo = geo.substitute(
           lx = lx,
           ly = ly,
@@ -238,6 +240,49 @@ class Sample2D(Sample):
           Nr = Nr,
           Nt = Nt,
           q1 = q1)
+    open(self.workdir + self.file_name + ".geo", "w").write(geo)
+
+  def postprocess_mesh(self):
+    self.mesh = process_2D_sample_mesh(self)
+
+class SampleFibre2D(Sample):
+  """
+  A 2D sample with a vertical fibre indentation mesh.
+  """
+  def __init__(self, Rf = 1., 
+                     ly1 = 1., ly2 = 10.,
+                     Nx = 16, Ny = 8,
+                     Nr = 16, Nt = None,
+                     **kwargs):
+    if Nt == None: Nt = np.pi / 2. * Ny
+    self.Rf = Rf
+    self.ly1 = ly1
+    self.ly2 = ly2
+    self.Nx = Nx
+    self.Ny = Ny
+    self.Nr = Nr
+    self.Nt = Nt
+    super().__init__(**kwargs)
+    
+  def preprocess_mesh(self):
+    Rf = self.Rf
+    ly1 = self.ly1
+    ly2 = self.ly2
+    Nx = self.Nx
+    Ny = self.Ny
+    Nr = self.Nr
+    Nt = self.Nt
+    geo = Template(
+       open(MODPATH + 
+       "/templates/models/indentation_2D/indentation_fibre_mesh_2D.geo").read())
+    geo = geo.substitute(
+          Rf = Rf,
+          ly1 = ly1,
+          ly2 = ly2,
+          Nx = Nx,
+          Ny = Ny,
+          Nr = Nr,
+          Nt = Nt)
     open(self.workdir + self.file_name + ".geo", "w").write(geo)
 
   def postprocess_mesh(self):
