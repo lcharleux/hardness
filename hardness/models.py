@@ -51,7 +51,7 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
      self.write_postproc()
      self.run_postproc()
      #HISTORY OUTPUTS
-     hist_path = self.workdir + "/reports/indentation_2D_hist.hrpt"
+     hist_path = self.workdir + "/reports/{0}_hist.hrpt".format(self.label)
      if os.path.isfile(hist_path):
        hist = argiope.abq.pypostproc.read_history_report(
             hist_path, steps = self.steps, x_name = "t") 
