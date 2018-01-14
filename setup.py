@@ -1,6 +1,6 @@
 from setuptools import setup
 
-setup(name='Hardness',
+setup(name='hardness',
       version='0.1',
       description="Python Indentation Toolbox",
       long_description="",
@@ -9,12 +9,14 @@ setup(name='Hardness',
       license='GPL v3',
       packages=['hardness'],
       zip_safe=False,
+      url='https://github.com/lcharleux/hardness',
       install_requires=[
           "numpy",
           "scipy",
           "matplotlib",
           "pandas",
           "jupyter",
-          "nbconvert"
+          "nbconvert",
+          "argiope",
           ],
       )
