@@ -29,3 +29,7 @@
 *__pycache__*
 doc/_build/*
 doc/notebooks_rst/*
+build/*
+hardness.egg-info/*
+dist/*
+
