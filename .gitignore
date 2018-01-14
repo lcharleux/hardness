@@ -26,3 +26,6 @@
 *.sim
 *.sta
 *.pyc
+*__pycache__*
+doc/_build/*
+doc/notebooks_rst/*

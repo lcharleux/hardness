@@ -1,8 +1,8 @@
 from setuptools import setup
 
-setup(name='hardness',
-      version='0.0',
-      description="Indentation toolbox",
+setup(name='Hardness',
+      version='0.1',
+      description="Python Indentation Toolbox",
       long_description="",
       author='Ludovic Charleux',
       author_email='ludovic.charleux@univ-smb.fr',
@@ -13,6 +13,8 @@ setup(name='hardness',
           "numpy",
           "scipy",
           "matplotlib",
-          "pandas"
+          "pandas",
+          "jupyter",
+          "nbconvert"
           ],
       )
