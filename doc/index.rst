@@ -2,6 +2,14 @@
 
 Hardness: A Python toolbox for indentation simulation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Install
+---------
+
+.. code-block:: console
+
+   pip install hardness
+
   
 Tutorials:
 ----------------
