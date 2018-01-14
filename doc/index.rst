@@ -18,6 +18,9 @@ Package documentation:
 .. toctree::
    :maxdepth: 2
    
+   models
+   postproc
+   
   
 
 

@@ -1,21 +1,67 @@
 Models
 ========
 
-Indentation dedicated models.
+Indentation dedicated classes and functions.
 
-Model
-~~~~~~~~~
+Meta classes
+~~~~~~~~~~~~~~~
 
-The model meta class aims at being subclassed by actual model classes.
 
-.. autoclass:: argiope.models.Model
+.. autoclass:: hardness.models.Indentation2D
    :members:
    :inherited-members:
 
-Part
-~~~~~~~~~~
-The part meta class helps creating part classes by providing useful methods.
+2D Indentation
+~~~~~~~~~~~~~~~~~~~~
 
-.. autoclass:: argiope.models.Part
+.. autofunction:: hardness.models.process_2D_sample_mesh
+
+.. autofunction:: hardness.models.process_2D_indenter_mesh
+
+Parts
+~~~~~~~~~~~~~~~~~~~~~
+
+Samples
+__________
+
+.. autoclass:: hardness.models.Sample
    :members:
    :inherited-members:
+
+.. autoclass:: hardness.models.Sample2D
+   :members:
+   :inherited-members:
+
+.. autoclass:: hardness.models.SampleFibre2D
+   :members:
+   :inherited-members:
+
+Indenters
+___________
+
+.. autoclass:: hardness.models.Indenter
+   :members:
+   :inherited-members:
+   
+.. autoclass:: hardness.models.Indenter2D
+   :members:
+   :inherited-members:   
+   
+.. autoclass:: hardness.models.SpheroconicalIndenter2D
+   :members:
+   :inherited-members:   
+   
+   
+Steps 
+________
+
+.. autoclass:: hardness.models.Step2D
+   :members:
+   :inherited-members:   
+   
+   
+Inputs file generators
+_________________________________   
+
+
+.. autofunction:: hardness.models.indentation_2D_input

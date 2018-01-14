@@ -34,7 +34,7 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
     
   def write_postproc(self):
     """
-    Writes the prosproc scripts
+    Writes the prosproc scripts for the chosen solver.
     """
     if self.solver == "abaqus":
       hardness.postproc.indentation_abqpostproc(
