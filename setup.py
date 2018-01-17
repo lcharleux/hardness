@@ -1,7 +1,8 @@
 from setuptools import setup
+import hardness
 
 setup(name='hardness',
-      version='0.1',
+      version=hardness.__version__,
       description="Python Indentation Toolbox",
       long_description="",
       author='Ludovic Charleux',
@@ -19,4 +20,7 @@ setup(name='hardness',
           "nbconvert",
           "argiope",
           ],
+      package_data={
+      '': ['*'], },
+      include_package_data = True
       )

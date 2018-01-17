@@ -1,3 +1,6 @@
+include requirements.txt
+recursive-include hardness/templates
+
 matplotlib>=1.1.1rc
 numpy>=1.6.1
 scipy>=0.9.0
