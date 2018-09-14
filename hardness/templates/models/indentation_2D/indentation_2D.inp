@@ -26,6 +26,7 @@ $INDENTER_MESH
 *INSTANCE, NAME = I_INDENTER, PART= P_INDENTER
 *END INSTANCE
 *END ASSEMBLY
+*AMPLITUDE, name=$AMPLITUDE
 **------------------------------------------------------------------------------
 ** SURFACE INTERACTIONS
 **------------------------------------------------------------------------------

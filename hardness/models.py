@@ -25,6 +25,7 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
     hardness.models.indentation_2D_input(sample_mesh = self.parts["sample"],
                                    indenter_mesh = self.parts["indenter"],
                                    steps = self.steps,
+                                   amplitude = self.amplitude,
                                    materials = self.materials,
                                    solver = self.solver,
                                    path = "{0}/{1}.inp".format(self.workdir,
@@ -319,9 +320,44 @@ class SpheroconicalIndenter2D(Indenter2D):
     open(self.workdir + self.file_name + ".geo", "w").write(geo)
   
   
-  
-  
+################################################################################
+# AMPLITUDE
+################################################################################  
+class Amplitude:
+  """
+  In order to control the load by a load vs time table.
+  """
+    
+  def __init__(self, type = "Exp",
+                     name = "Exp100",
+                     duration = 100,
+                     Nb_data_points = 100, 
+                     load0 = 10, 
+                     strain_rate0 = .01, **kwargs):
+    self.type = type
+    self.name = name  
+    self.duration = duration  
+    self.Nb_data_points = Nb_data_points
+    self.load0 = load0
+    self.strain_rate0 = strain_rate0  
+    
+  def get_amplitude_table(self):
+    """
+    Calculates the amplitude data
+    """
+    P0 = self.load0
+    eps_0 = self.strain_rate0
+    tmax = self.duration
+    Np = self.Nb_data_points
+    time = np.linspace(0., tmax, Np)
+    load = P0 * np.exp(2 * eps_0 * time) 
+    return pd.DataFrame({"time": time, 
+                          "load": load}) 
 
+  def write_inp(self):
+    return self.get_amplitude_table()[["time", "load"]].to_csv(header = False,index = False,sep = ",").strip()
+  
+  
   
 ################################################################################
 # 2D STEP
@@ -338,6 +374,7 @@ class Step2D:
                      controlled_value = .1,
                      min_frame_duration = 1.e-8,
                      field_output_frequency = 99999,
+                     amplitude_name = "",
                      solver = "abaqus"):
     self.control_type = control_type
     self.name = name  
@@ -347,9 +384,10 @@ class Step2D:
     self.controlled_value = controlled_value
     self.min_frame_duration = min_frame_duration
     self.field_output_frequency = field_output_frequency
+    self.amplitude_name = amplitude_name 
     self.solver = solver
-                     
-  def get_input(self):
+    
+  def get_input(self, amplitude_name):
     control_type = self.control_type 
     name = self.name 
     duration = self.duration
@@ -359,28 +397,38 @@ class Step2D:
     min_frame_duration = self.min_frame_duration
     solver = self.solver
     rootPath = "/templates/models/indentation_2D/steps/"
+    amplitude_name=self.amplitude_name
+    instruc = ""
     if solver == "abaqus":
       if kind == "fixed":
         if control_type == "disp":
           pattern = rootPath + "indentation_2D_step_disp_control_fixed.inp"
-        if control_type == "force":
-          pattern = rootPath + "indentation_2D_step_load_control_fixed.inp"  
+        else :
+          pattern = rootPath + "indentation_2D_step_load_control_fixed.inp"
+
+        if control_type == "amplitude":
+          instruc = ", amplitude=" + amplitude_name
         pattern = Template(open(MODPATH + pattern).read())
-                
+
         return pattern.substitute(NAME = name,
                            CONTROLLED_VALUE = controlled_value,
+                           AMPL_INSTRUCTION = instruc,
                            DURATION = duration,
                            FRAMEDURATION = float(duration) / nframes, 
                            FIELD_OUTPUT_FREQUENCY = self.field_output_frequency)
       if kind == "adaptative":
         if control_type == "disp":
           pattern = rootPath + "indentation_2D_step_disp_control_adaptative.inp"
-        if control_type == "force":
-          pattern = rootPath + "indentation_2D_step_load_control_adaptative.inp"  
+        else :
+          pattern = rootPath + "indentation_2D_step_load_control_adaptative.inp"
+
+        if control_type == "amplitude":
+          instruc = ", amplitude=" + amplitude_name
         pattern = Template(open(MODPATH + pattern).read())
-                
+		
         return pattern.substitute(NAME = name,
                            CONTROLLED_VALUE = controlled_value,
+                           AMPL_INSTRUCTION = instruc,
                            DURATION = duration,
                            FRAMEDURATION = float(duration) / nframes, 
                            MINFRAMEDURATION = min_frame_duration,
@@ -391,7 +439,8 @@ class Step2D:
 ################################################################################  
 def indentation_2D_input(sample_mesh, 
                          indenter_mesh,
-                         steps, 
+                         steps,
+                         amplitude,
                          materials,
                          path = None, 
                          element_map = None, 
@@ -412,7 +461,8 @@ def indentation_2D_input(sample_mesh,
     pattern = pattern.substitute(
         SAMPLE_MESH = sample_mesh.mesh.write_inp(),
         INDENTER_MESH = indenter_mesh.mesh.write_inp(),
-        STEPS = "".join([step.get_input() for step in steps]),
+        AMPLITUDE = amplitude.name + "\n" + amplitude.write_inp(),
+        STEPS = "".join([step.get_input(amplitude_name = amplitude.name) for step in steps]),
         MATERIALS = "\n".join([m.write_inp() for m in materials]) )
   if path == None:            
     return pattern
