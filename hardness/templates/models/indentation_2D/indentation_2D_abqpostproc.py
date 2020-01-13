@@ -59,11 +59,17 @@ if job_completed:
   ref_node = [n.label for n in  odb.rootAssembly.instances["I_INDENTER"].nodeSets["REF_NODE"].nodes][0]
   tip_node = [n.label for n in  odb.rootAssembly.instances["I_INDENTER"].nodeSets["TIP_NODE"].nodes][0]
   histDict = {
-              "Wtot":"External work: ALLWK for Whole Model",
-              "Wf"  :"Frictional dissipation: ALLFD for Whole Model",
-              "Wps" :"Plastic dissipation: ALLPD PI: I_SAMPLE in ELSET ALL_ELEMENTS",
-              "Wei" :"Strain energy: ALLSE PI: I_INDENTER in ELSET ALL_ELEMENTS",
-              "Wes" :"Strain energy: ALLSE PI: I_SAMPLE in ELSET ALL_ELEMENTS",
+              "Wext":"External work: ALLWK for Whole Model",
+              "Wart":"Artificial strain energy: ALLAE for Whole Model",
+              "Eint":"Internal energy: ALLIE for Whole Model",
+              #"Wkin":"Kinetic energy: ALLKE for Whole Model",
+              "Etot":"Total energy of the output set: ETOTAL for Whole Model",
+              #"Wvisc"  :"Viscous dissipation: ALLVD for Whole Model",
+              "Wfric"  :"Frictional dissipation: ALLFD for Whole Model",
+              "Wplast_i" :"Plastic dissipation: ALLPD PI: I_INDENTER in ELSET ALL_ELEMENTS",
+              "Wplast_s" :"Plastic dissipation: ALLPD PI: I_SAMPLE in ELSET ALL_ELEMENTS",
+              "Welast_i" :"Strain energy: ALLSE PI: I_INDENTER in ELSET ALL_ELEMENTS",
+              "Welast_s" :"Strain energy: ALLSE PI: I_SAMPLE in ELSET ALL_ELEMENTS",
               "RF"  :"Reaction force: RF2 PI: I_INDENTER Node {0} in NSET REF_NODE".format(ref_node),
               "CF"  :"Point loads: CF2 PI: I_INDENTER Node {0} in NSET REF_NODE".format(ref_node),
               "dtip":"Spatial displacement: U2 PI: I_INDENTER Node {0} in NSET TIP_NODE".format(tip_node),

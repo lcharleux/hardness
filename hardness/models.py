@@ -53,11 +53,67 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
      #HISTORY OUTPUTS
      hist_path = self.workdir + "/reports/{0}_hist.hrpt".format(self.label)
      if os.path.isfile(hist_path):
-       hist = argiope.abq.pypostproc.read_history_report(
+        raw_hist = argiope.abq.pypostproc.read_history_report(
             hist_path, steps = self.steps, x_name = "t") 
-       hist["F"] = hist.CF + hist.RF
-       self.data["history"] = hist
-     # FIELD OUTPUTS
+        #hist = raw_hist[["t", "Wes", "Wei", "Wps", "Wpi", "Wf", "Wtot",]].copy()
+        hist = pd.DataFrame()
+        hist[("time", "")] = raw_hist.t
+        hist[("step", "")] = raw_hist.step
+        # FORCES
+        hist[("force", "F")] = -(raw_hist.CF + raw_hist.RF)
+        # DISPLACEMENTS
+        hist[("disp", "htot")] = -raw_hist.dtot
+        hist[("disp", "hsamp")] = -raw_hist.dtip
+        hist[("disp", "hind")] = hist[("disp", "htot")] - hist[("disp", "hsamp")]
+        # ENERGIES
+        hist[("energies", "Etot")] = raw_hist.Etot
+        hist[("energies", "Eint")] = raw_hist.Eint
+        hist[("energies", "Wext")] = raw_hist.Wext
+        hist[("energies", "Wart")] = raw_hist.Wart
+        hist[("energies", "Wfric")] = raw_hist.Wfric
+        hist[("energies", "Wels")] = raw_hist.Welast_s
+        hist[("energies", "Wels")] = raw_hist.Welast_i
+        #hist["ht"] = -raw_hist.dtot
+        #hist["hs"] = -raw_hist.dtip
+        #hist["hi"] = hist.ht - hist.hs 
+        # CONTACT HISTORY
+        contact_path = self.workdir + "/reports/{0}_contact.hrpt".format(
+                       self.label)
+        contact_data = argiope.abq.pypostproc.read_history_report(contact_path, 
+                                                             steps=self.steps)
+        cols = contact_data.columns.values
+        coor1_cols = sorted([c for c in cols if c.startswith("COOR1")])
+        coor2_cols = sorted([c for c in cols if c.startswith("COOR2")])
+        cpress_cols = sorted([c for c in cols if c.startswith("CPRESS")])
+        coor1 = contact_data[coor1_cols].values
+        order = np.argsort(coor1[0])
+        coor2 = contact_data[coor2_cols].values
+        cpress = contact_data[cpress_cols].values
+        coor1 = coor1[:, order]
+        coor2 = coor2[:, order]
+        cpress = cpress[:, order]
+        ind = np.arange(coor1.shape[0])
+        mask = np.outer(np.ones(coor1.shape[0]) , 
+                        np.arange(coor1.shape[1])).astype(np.int32)
+        mask *= cpress > 0.
+        mask = mask.max(axis =1)
+        upper_mask = np.clip(mask+1, 0, coor1.shape[1])
+        rc_lower = coor1[ind, mask]
+        rc_upper = coor1[ind, upper_mask]
+        rc_mid =  (rc_upper + rc_lower)/2.
+        zc_lower = coor2[ind, mask]
+        zc_upper = coor2[ind, upper_mask]
+        zc_mid =  (zc_upper + zc_lower)/2.
+
+        hist[("contact", "rc_lower")] = rc_lower
+        hist[("contact", "rc_upper")] = rc_upper
+        hist[("contact", "rc_mid")] = rc_mid
+        hist[("contact", "zc_lower")] = zc_lower 
+        hist[("contact", "zc_upper")] = zc_upper 
+        hist[("contact", "zc_mid")] = zc_mid 
+        hist.columns = pd.MultiIndex.from_tuples(hist.columns)  
+        self.data["history"] = hist  
+# FIELD OUTPUTS
      files = os.listdir(self.workdir + "reports/")
      files = [f for f in files if f.endswith(".frpt")]
      files.sort()
@@ -264,6 +320,50 @@ class Indenter2D(Indenter):
   """
   def postprocess_mesh(self):
     self.mesh = process_2D_indenter_mesh(self)
+
+
+class ConicalIndenter2D(Indenter2D):
+  """
+  A spheroconical indenter class.
+  """
+  
+  def __init__(self, psi= 70.29, 
+                     r1 = 1., r2 = 10., r3 = 100., 
+                     lc1 = 0.1, lc2 = 20.,
+                     **kwargs):
+    self.psi = psi
+    self.r1 = r1
+    self.r2 = r2
+    self.r3 = r3
+    self.lc1 = lc1
+    self.lc2 = lc2
+    super().__init__(**kwargs)
+  
+  def preprocess_mesh(self):                 
+    psi = self.psi
+    r1 = self.r1
+    r2 = self.r2
+    r3 = self.r3
+    lc1 = self.lc1
+    lc2 = self.lc2
+    # Some high lvl maths...
+    psi = np.radians(psi)
+    x2 = r3 * np.sin(psi)
+    y2 = r3 * np.cos(psi) 
+    y3 = r3 
+    # Template filling  
+    geo = Template(
+          open(MODPATH + "/templates/models/indentation_2D/conical_indenter_mesh_2D.geo").read())
+    geo = geo.substitute(
+       lc1 = lc1,
+       lc2 = lc2,
+       r1 = r1,
+       r2 = r2,
+       x2 = x2,
+       y2 = y2,
+       y3 = y3)
+    open(self.workdir + self.file_name + ".geo", "w").write(geo)
+
   
 class SpheroconicalIndenter2D(Indenter2D):
   """
