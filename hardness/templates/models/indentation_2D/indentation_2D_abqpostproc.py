@@ -66,6 +66,7 @@ if job_completed:
               "Etot":"Total energy of the output set: ETOTAL for Whole Model",
               #"Wvisc"  :"Viscous dissipation: ALLVD for Whole Model",
               "Wfric"  :"Frictional dissipation: ALLFD for Whole Model",
+              "Carea": "Total area in contact: CAREA    ASSEMBLY_I_SAMPLE_SURFACE/ASSEMBLY_I_INDENTER_SURFACE",
               "Wplast_i" :"Plastic dissipation: ALLPD PI: I_INDENTER in ELSET ALL_ELEMENTS",
               "Wplast_s" :"Plastic dissipation: ALLPD PI: I_SAMPLE in ELSET ALL_ELEMENTS",
               "Welast_i" :"Strain energy: ALLSE PI: I_INDENTER in ELSET ALL_ELEMENTS",

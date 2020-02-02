@@ -51,79 +51,94 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
      self.write_postproc()
      self.run_postproc()
      #HISTORY OUTPUTS
-     hist_path = self.workdir + "/reports/{0}_hist.hrpt".format(self.label)
-     if os.path.isfile(hist_path):
-        raw_hist = argiope.abq.pypostproc.read_history_report(
-            hist_path, steps = self.steps, x_name = "t") 
-        #hist = raw_hist[["t", "Wes", "Wei", "Wps", "Wpi", "Wf", "Wtot",]].copy()
-        hist = pd.DataFrame()
-        hist[("time", "")] = raw_hist.t
-        hist[("step", "")] = raw_hist.step
-        # FORCES
-        hist[("force", "F")] = -(raw_hist.CF + raw_hist.RF)
-        # DISPLACEMENTS
-        hist[("disp", "htot")] = -raw_hist.dtot
-        hist[("disp", "hsamp")] = -raw_hist.dtip
-        hist[("disp", "hind")] = hist[("disp", "htot")] - hist[("disp", "hsamp")]
-        # ENERGIES
-        hist[("energies", "Etot")] = raw_hist.Etot
-        hist[("energies", "Eint")] = raw_hist.Eint
-        hist[("energies", "Wext")] = raw_hist.Wext
-        hist[("energies", "Wart")] = raw_hist.Wart
-        hist[("energies", "Wfric")] = raw_hist.Wfric
-        hist[("energies", "Wels")] = raw_hist.Welast_s
-        hist[("energies", "Wels")] = raw_hist.Welast_i
-        #hist["ht"] = -raw_hist.dtot
-        #hist["hs"] = -raw_hist.dtip
-        #hist["hi"] = hist.ht - hist.hs 
-        # CONTACT HISTORY
-        contact_path = self.workdir + "/reports/{0}_contact.hrpt".format(
-                       self.label)
-        contact_data = argiope.abq.pypostproc.read_history_report(contact_path, 
-                                                             steps=self.steps)
-        cols = contact_data.columns.values
-        coor1_cols = sorted([c for c in cols if c.startswith("COOR1")])
-        coor2_cols = sorted([c for c in cols if c.startswith("COOR2")])
-        cpress_cols = sorted([c for c in cols if c.startswith("CPRESS")])
-        coor1 = contact_data[coor1_cols].values
-        order = np.argsort(coor1[0])
-        coor2 = contact_data[coor2_cols].values
-        cpress = contact_data[cpress_cols].values
-        coor1 = coor1[:, order]
-        coor2 = coor2[:, order]
-        cpress = cpress[:, order]
-        ind = np.arange(coor1.shape[0])
-        mask = np.outer(np.ones(coor1.shape[0]) , 
-                        np.arange(coor1.shape[1])).astype(np.int32)
-        mask *= cpress > 0.
-        mask = mask.max(axis =1)
-        upper_mask = np.clip(mask+1, 0, coor1.shape[1])
-        rc_lower = coor1[ind, mask]
-        rc_upper = coor1[ind, upper_mask]
-        rc_mid =  (rc_upper + rc_lower)/2.
-        zc_lower = coor2[ind, mask]
-        zc_upper = coor2[ind, upper_mask]
-        zc_mid =  (zc_upper + zc_lower)/2.
+     completed_path = self.workdir + "/{0}_completed.txt".format(self.label)
+     if os.path.isfile(completed_path):
+        completed_value = open(completed_path).read().strip().lower()
+        if completed_value == "true":
+            print("# SIMULATION COMPLETED: EXTRACTING OUTPUTS")
+            hist_path = self.workdir + "/reports/{0}_hist.hrpt".format(self.label)
+            raw_hist = argiope.abq.pypostproc.read_history_report(
+                hist_path, steps = self.steps, x_name = "t") 
+            #hist = raw_hist[["t", "Wes", "Wei", "Wps", "Wpi", "Wf", "Wtot",]].copy()
+            hist = pd.DataFrame()
+            hist[("time", "")] = raw_hist.t
+            hist[("step", "")] = raw_hist.step
+            # FORCES
+            hist[("force", "F")] = -(raw_hist.CF + raw_hist.RF)
+            # DISPLACEMENTS
+            hist[("disp", "htot")] = -raw_hist.dtot
+            hist[("disp", "hsamp")] = -raw_hist.dtip
+            hist[("disp", "hind")] = hist[("disp", "htot")] - hist[("disp", "hsamp")]
+            # ENERGIES
+            hist[("energies", "Etot")] = raw_hist.Etot
+            hist[("energies", "Eint")] = raw_hist.Eint
+            hist[("energies", "Wext")] = raw_hist.Wext
+            hist[("energies", "Wart")] = raw_hist.Wart
+            hist[("energies", "Wfric")] = raw_hist.Wfric
+            hist[("energies", "Wels")] = raw_hist.Welast_s
+            hist[("energies", "Wels")] = raw_hist.Welast_i
+            #hist["ht"] = -raw_hist.dtot
+            #hist["hs"] = -raw_hist.dtip
+            #hist["hi"] = hist.ht - hist.hs 
+            hist[("contact", "Aw_carea")] = raw_hist.Carea
+            
+            # CONTACT HISTORY
+            contact_path = self.workdir + "/reports/{0}_contact.hrpt".format(
+                           self.label)
+            contact_data = argiope.abq.pypostproc.read_history_report(contact_path, 
+                                                                 steps=self.steps)
+            cols = contact_data.columns.values
+            coor1_cols = sorted([c for c in cols if c.startswith("COOR1")])
+            coor2_cols = sorted([c for c in cols if c.startswith("COOR2")])
+            cpress_cols = sorted([c for c in cols if c.startswith("CPRESS")])
+            coor1 = contact_data[coor1_cols].values
+            order = np.argsort(coor1[0])
+            coor2 = contact_data[coor2_cols].values
+            cpress = contact_data[cpress_cols].values
+            coor1 = coor1[:, order]
+            coor2 = coor2[:, order]
+            cpress = cpress[:, order]
+            ind = np.arange(coor1.shape[0])
+            mask = np.outer(np.ones(coor1.shape[0]) , 
+                            np.arange(coor1.shape[1])).astype(np.int32)
+            mask *= cpress > 0.
+            mask = mask.max(axis =1)
+            upper_mask = np.clip(mask+1, 0, coor1.shape[1])
+            rc_lower = coor1[ind, mask]
+            rc_upper = coor1[ind, upper_mask]
+            rc_mid =  (rc_upper + rc_lower)/2.
+            zc_lower = coor2[ind, mask]
+            zc_upper = coor2[ind, upper_mask]
+            zc_mid =  (zc_upper + zc_lower)/2.
 
-        hist[("contact", "rc_lower")] = rc_lower
-        hist[("contact", "rc_upper")] = rc_upper
-        hist[("contact", "rc_mid")] = rc_mid
-        hist[("contact", "zc_lower")] = zc_lower 
-        hist[("contact", "zc_upper")] = zc_upper 
-        hist[("contact", "zc_mid")] = zc_mid 
-        hist.columns = pd.MultiIndex.from_tuples(hist.columns)  
-        self.data["history"] = hist  
-# FIELD OUTPUTS
-     files = os.listdir(self.workdir + "reports/")
-     files = [f for f in files if f.endswith(".frpt")]
-     files.sort()
-     for path in files:
-       field = argiope.abq.pypostproc.read_field_report(
-                           self.workdir + "reports/" + path)
-       if field.part == "I_SAMPLE":
-         self.parts["sample"].mesh.fields.append(field)
-       if field.part == "I_INDENTER":
-         self.parts["indenter"].mesh.fields.append(field)
+            hist[("contact", "rc_lower")] = rc_lower
+            hist[("contact", "rc_upper")] = rc_upper
+            hist[("contact", "rc_mid")] = rc_mid
+            hist[("contact", "zc_lower")] = zc_lower 
+            hist[("contact", "zc_upper")] = zc_upper 
+            hist[("contact", "zc_mid")] = zc_mid 
+            hist.columns = pd.MultiIndex.from_tuples(hist.columns)  
+            self.data["history"] = hist  
+            # FIELD OUTPUTS
+            files = os.listdir(self.workdir + "reports/")
+            files = [f for f in files if f.endswith(".frpt")]
+            files.sort()
+            for path in files:
+                field = argiope.abq.pypostproc.read_field_report(
+                                   self.workdir + "reports/" + path)
+                if field.part == "I_SAMPLE":
+                    self.parts["sample"].mesh.fields.append(field)
+                if field.part == "I_INDENTER":
+                    self.parts["indenter"].mesh.fields.append(field)
+
+
+class ConicalIndentation2D(Indentation2D):
+    """
+    A class dedicated to 2D conical indentation.
+    """
+    def outputs(self):
+        return 
+        #self.         
 ################################################################################
 # MESH PROCESSING
 ################################################################################
