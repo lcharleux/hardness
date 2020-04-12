@@ -25,6 +25,7 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
     hardness.models.indentation_2D_input(sample_mesh = self.parts["sample"],
                                    indenter_mesh = self.parts["indenter"],
                                    steps = self.steps,
+                                   amplitude = self.amplitude,
                                    materials = self.materials,
                                    solver = self.solver,
                                    path = "{0}/{1}.inp".format(self.workdir,
@@ -319,8 +320,6 @@ class SpheroconicalIndenter2D(Indenter2D):
     open(self.workdir + self.file_name + ".geo", "w").write(geo)
   
   
-  
-  
 
   
 ################################################################################
@@ -338,6 +337,7 @@ class Step2D:
                      controlled_value = .1,
                      min_frame_duration = 1.e-8,
                      field_output_frequency = 99999,
+                     amplitude = argiope.models.Amplitude(),
                      solver = "abaqus"):
     self.control_type = control_type
     self.name = name  
@@ -347,8 +347,9 @@ class Step2D:
     self.controlled_value = controlled_value
     self.min_frame_duration = min_frame_duration
     self.field_output_frequency = field_output_frequency
+    self.amplitude = amplitude 
     self.solver = solver
-                     
+    
   def get_input(self):
     control_type = self.control_type 
     name = self.name 
@@ -359,28 +360,34 @@ class Step2D:
     min_frame_duration = self.min_frame_duration
     solver = self.solver
     rootPath = "/templates/models/indentation_2D/steps/"
+    amplitude=self.amplitude
+    
     if solver == "abaqus":
       if kind == "fixed":
         if control_type == "disp":
           pattern = rootPath + "indentation_2D_step_disp_control_fixed.inp"
-        if control_type == "force":
-          pattern = rootPath + "indentation_2D_step_load_control_fixed.inp"  
+        else :
+          pattern = rootPath + "indentation_2D_step_load_control_fixed.inp"
+
         pattern = Template(open(MODPATH + pattern).read())
-                
+
         return pattern.substitute(NAME = name,
                            CONTROLLED_VALUE = controlled_value,
+                           AMPL_INSTRUCTION = amplitude.call_amplitude_inp(),
                            DURATION = duration,
                            FRAMEDURATION = float(duration) / nframes, 
                            FIELD_OUTPUT_FREQUENCY = self.field_output_frequency)
       if kind == "adaptative":
         if control_type == "disp":
           pattern = rootPath + "indentation_2D_step_disp_control_adaptative.inp"
-        if control_type == "force":
-          pattern = rootPath + "indentation_2D_step_load_control_adaptative.inp"  
+        else :
+          pattern = rootPath + "indentation_2D_step_load_control_adaptative.inp"
+
         pattern = Template(open(MODPATH + pattern).read())
-                
+		
         return pattern.substitute(NAME = name,
                            CONTROLLED_VALUE = controlled_value,
+                           AMPL_INSTRUCTION = amplitude.call_amplitude_inp(),
                            DURATION = duration,
                            FRAMEDURATION = float(duration) / nframes, 
                            MINFRAMEDURATION = min_frame_duration,
@@ -391,7 +398,8 @@ class Step2D:
 ################################################################################  
 def indentation_2D_input(sample_mesh, 
                          indenter_mesh,
-                         steps, 
+                         steps,
+                         amplitude,
                          materials,
                          path = None, 
                          element_map = None, 
@@ -412,6 +420,7 @@ def indentation_2D_input(sample_mesh,
     pattern = pattern.substitute(
         SAMPLE_MESH = sample_mesh.mesh.write_inp(),
         INDENTER_MESH = indenter_mesh.mesh.write_inp(),
+        AMPLITUDE = amplitude.write_inp(),
         STEPS = "".join([step.get_input() for step in steps]),
         MATERIALS = "\n".join([m.write_inp() for m in materials]) )
   if path == None:            
