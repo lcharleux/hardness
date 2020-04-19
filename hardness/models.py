@@ -5,6 +5,7 @@ import argiope, hardness
 import os, subprocess, inspect
 from string import Template
 import gmsh
+import textwrap
 # PATH TO MODULE
 import hardness
 MODPATH = os.path.dirname(inspect.getfile(hardness))
@@ -123,7 +124,16 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
             hist[("contact", "zc_upper")] = zc_upper 
             hist[("contact", "zc_mid")] = zc_mid 
             hist.columns = pd.MultiIndex.from_tuples(hist.columns)  
-            self.data["history"] = hist  
+            self.data["history"] = hist 
+           
+            plabels = ["v{0}".format(p) for p in np.arange(coor1.shape[1])]
+            coor1d = pd.DataFrame(data = coor1, columns = [("x", p) for p in plabels])
+            coor2d = pd.DataFrame(data = coor2, columns = [("y", p) for p in plabels])
+            cpressd = pd.DataFrame(data = cpress, columns = [("p", p) for p in plabels])
+            contact_history = pd.concat([coor1d, coor2d, cpressd], axis = 1)
+            contact_history.columns = pd.MultiIndex.from_tuples(contact_history.columns)  
+            self.data["contact_history"] = contact_history
+    
             # FIELD OUTPUTS
             files = os.listdir(self.workdir + "reports/")
             files = [f for f in files if f.endswith(".frpt")]
@@ -143,7 +153,140 @@ class ConicalIndentation2D(Indentation2D):
     """
     def outputs(self):
         return 
-        #self.         
+        #self. 
+        
+class Indentation3DFull(argiope.models.Model, argiope.utils.Container):
+  """
+  3D Full indentation class.
+  """
+  
+  def __init__(self, friction = 0., *args, **kwargs):
+    self.friction = friction
+    argiope.models.Model.__init__(self, *args, **kwargs)
+    
+  def write_input(self):
+    """
+    Writes the input file in the chosen format.
+    """
+    indentation_3D_full_input(sample_mesh = self.parts["sample"],
+                                   indenter_mesh = self.parts["indenter"],
+                                   steps = self.steps,
+                                   materials = self.materials,
+                                   friction = self.friction,
+                                   solver = self.solver,
+                                   path = "{0}/{1}.inp".format(self.workdir,
+                                                               self.label))
+                                   
+                                   
+    
+  def write_postproc(self):
+    """
+    Writes the prosproc scripts for the chosen solver.
+    """
+    if self.solver == "abaqus":
+      hardness.postproc.indentation_3D_abqpostproc(
+          path = "{0}/{1}_abqpp.py".format(
+              self.workdir,
+              self.label),
+          label = self.label,    
+          solver= self.solver)
+  
+  def postproc(self):
+     """
+     Runs the whole post proc.
+     """
+     self.write_postproc()
+     self.run_postproc()
+     #HISTORY OUTPUTS
+     completed_path = self.workdir + "/{0}_completed.txt".format(self.label)
+     if os.path.isfile(completed_path):
+        completed_value = open(completed_path).read().strip().lower()
+        if completed_value == "true":
+            print("# SIMULATION COMPLETED: EXTRACTING OUTPUTS")
+            hist_path = self.workdir + "/reports/{0}_hist.hrpt".format(self.label)
+            raw_hist = argiope.abq.pypostproc.read_history_report(
+                hist_path, steps = self.steps, x_name = "t") 
+            #hist = raw_hist[["t", "Wes", "Wei", "Wps", "Wpi", "Wf", "Wtot",]].copy()
+            hist = pd.DataFrame()
+            hist[("time", "")] = raw_hist.t
+            hist[("step", "")] = raw_hist.step
+            # FORCES
+            hist[("force", "F")] = -(raw_hist.CF + raw_hist.RF)
+            # DISPLACEMENTS
+            hist[("disp", "htot")] = -raw_hist.dtot
+            hist[("disp", "hsamp")] = -raw_hist.dtip
+            hist[("disp", "hind")] = hist[("disp", "htot")] - hist[("disp", "hsamp")]
+            # ENERGIES
+            hist[("energies", "Etot")] = raw_hist.Etot
+            hist[("energies", "Eint")] = raw_hist.Eint
+            hist[("energies", "Wext")] = raw_hist.Wext
+            hist[("energies", "Wart")] = raw_hist.Wart
+            hist[("energies", "Wfric")] = raw_hist.Wfric
+            hist[("energies", "Wels")] = raw_hist.Welast_s
+            hist[("energies", "Wels")] = raw_hist.Welast_i
+            #hist["ht"] = -raw_hist.dtot
+            #hist["hs"] = -raw_hist.dtip
+            #hist["hi"] = hist.ht - hist.hs 
+            hist[("contact", "Aw_carea")] = raw_hist.Carea
+            
+            # CONTACT HISTORY
+            contact_path = self.workdir + "/reports/{0}_contact.hrpt".format(
+                           self.label)
+            contact_data = argiope.abq.pypostproc.read_history_report(contact_path, 
+                                                                 steps=self.steps)
+            cols = contact_data.columns.values
+            coor1_cols = sorted([c for c in cols if c.startswith("COOR1")])
+            coor2_cols = sorted([c for c in cols if c.startswith("COOR2")])
+            cpress_cols = sorted([c for c in cols if c.startswith("CPRESS")])
+            coor1 = contact_data[coor1_cols].values
+            order = np.argsort(coor1[0])
+            coor2 = contact_data[coor2_cols].values
+            cpress = contact_data[cpress_cols].values
+            coor1 = coor1[:, order]
+            coor2 = coor2[:, order]
+            cpress = cpress[:, order]
+            ind = np.arange(coor1.shape[0])
+            mask = np.outer(np.ones(coor1.shape[0]) , 
+                            np.arange(coor1.shape[1])).astype(np.int32)
+            mask *= cpress > 0.
+            mask = mask.max(axis =1)
+            upper_mask = np.clip(mask+1, 0, coor1.shape[1])
+            rc_lower = coor1[ind, mask]
+            rc_upper = coor1[ind, upper_mask]
+            rc_mid =  (rc_upper + rc_lower)/2.
+            zc_lower = coor2[ind, mask]
+            zc_upper = coor2[ind, upper_mask]
+            zc_mid =  (zc_upper + zc_lower)/2.
+
+            hist[("contact", "rc_lower")] = rc_lower
+            hist[("contact", "rc_upper")] = rc_upper
+            hist[("contact", "rc_mid")] = rc_mid
+            hist[("contact", "zc_lower")] = zc_lower 
+            hist[("contact", "zc_upper")] = zc_upper 
+            hist[("contact", "zc_mid")] = zc_mid 
+            hist.columns = pd.MultiIndex.from_tuples(hist.columns)  
+            self.data["history"] = hist 
+           
+            plabels = ["v{0}".format(p) for p in np.arange(coor1.shape[1])]
+            coor1d = pd.DataFrame(data = coor1, columns = [("x", p) for p in plabels])
+            coor2d = pd.DataFrame(data = coor2, columns = [("y", p) for p in plabels])
+            cpressd = pd.DataFrame(data = cpress, columns = [("p", p) for p in plabels])
+            contact_history = pd.concat([coor1d, coor2d, cpressd], axis = 1)
+            contact_history.columns = pd.MultiIndex.from_tuples(contact_history.columns)  
+            self.data["contact_history"] = contact_history
+    
+            # FIELD OUTPUTS
+            files = os.listdir(self.workdir + "reports/")
+            files = [f for f in files if f.endswith(".frpt")]
+            files.sort()
+            for path in files:
+                field = argiope.abq.pypostproc.read_field_report(
+                                   self.workdir + "reports/" + path)
+                if field.part == "I_SAMPLE":
+                    self.parts["sample"].mesh.fields.append(field)
+                if field.part == "I_INDENTER":
+                    self.parts["indenter"].mesh.fields.append(field)
+                
 ################################################################################
 # MESH PROCESSING
 ################################################################################
@@ -545,17 +688,17 @@ class PyramidalIndenter3DFull(Indenter3D):
 
         # POINTS
         model.addPhysicalGroup(0, [top_point], 1)
-        model.setPhysicalName(0, 1, "INDENTER_TOP_POINT")
+        model.setPhysicalName(0, 1, "REF_NODE")
         model.addPhysicalGroup(0, [tip_point], 2)
-        model.setPhysicalName(0, 2, "INDENTER_TIP_POINT")
+        model.setPhysicalName(0, 2, "TIP_NODE")
         # SURFACES
         model.addPhysicalGroup(2, [top_surface], 1)
-        model.setPhysicalName(2, 1, "INDENTER_TOP_SURFACE")
+        model.setPhysicalName(2, 1, "RIGID_NODES")
         model.addPhysicalGroup(2, [s for s in surfaces if s != top_surface], 2)
-        model.setPhysicalName(2, 2, "INDENTER_BOTTOM_SURFACE")
+        model.setPhysicalName(2, 2, "SURFACE")
         # VOLUMES
         model.addPhysicalGroup(3, volumes, 1)
-        model.setPhysicalName(3, 1, "INDENTER_BULK")
+        model.setPhysicalName(3, 1, "ALL_ELEMENTS")
          
         # MESH CONTROL
         model.mesh.field.add("Distance", 1)
@@ -577,14 +720,18 @@ class PyramidalIndenter3DFull(Indenter3D):
             gmsh.fltk.run()
         gmsh.finalize()
         mesh = argiope.mesh.read_msh(self.file_name + ".msh")
-        for eset in ["INDENTER_TOP_POINT", 
-                     "INDENTER_TIP_POINT",
-                     "INDENTER_TOP_SURFACE",
-                     "INDENTER_BOTTOM_SURFACE"]:
+        for eset in ["REF_NODE", 
+                     "TIP_NODE",
+                     "RIGID_NODES",
+                     "SURFACE"]:
             mesh.element_set_to_node_set(eset)
             del mesh.elements[("sets", eset, "")]
         mesh.elements = mesh.elements[mesh.space() == 3]
-        mesh.node_set_to_surface("INDENTER_BOTTOM_SURFACE")
+        mesh.node_set_to_surface("SURFACE")
+        if self.element_map != None:
+            mesh = self.element_map(mesh)
+        if self.material_map != None:
+            mesh = self.material_map(mesh)
         self.mesh = mesh  
   
 class TransverseFiberSample3D(Sample):
@@ -639,17 +786,19 @@ class TransverseFiberSample3D(Sample):
         factory.addSphere(0., 0., 0., Rs, 5)
         factory.intersect([(3,3)], [(3,5)], 6, removeTool = False )
         factory.intersect([(3,4)], [(3,5)], 7, removeTool = True )
+        # WHY FRAGMENT ?: TO ENSURE COHERENCE BETWEEN THE TWO MESHES
+        out = factory.fragment( [(3,7)], [(3,6)], removeObject = True, removeTool = True)
 
         # MODEL ANALYSIS
         factory.synchronize()
-        model.addPhysicalGroup(2, [23, 28, 31], 1)
-        model.setPhysicalName(2, 1, "SAMPLE_TOP_SURFACE")
-        model.addPhysicalGroup(2, [24, 26,27, 29], 2)
-        model.setPhysicalName(2, 2, "SAMPLE_BOTTOM_SURFACE")
+        model.addPhysicalGroup(2, [1, 4, 5], 1)
+        model.setPhysicalName(2, 1, "SURFACE")
+        model.addPhysicalGroup(2, [2, 6, 7, 8], 2)
+        model.setPhysicalName(2, 2, "BOTTOM")
         model.addPhysicalGroup(3, [6], 1)
-        model.setPhysicalName(3, 1, "SAMPLE_FIBER")
+        model.setPhysicalName(3, 1, "FIBER")
         model.addPhysicalGroup(3, [7], 2)
-        model.setPhysicalName(3, 2, "SAMPLE_BULK")
+        model.setPhysicalName(3, 2, "MATRIX")
 
         # MESH CONTROL
         top_point = factory.addPoint(0., 0., 0.)
@@ -673,12 +822,16 @@ class TransverseFiberSample3D(Sample):
             gmsh.fltk.run()
         gmsh.finalize()
         mesh = argiope.mesh.read_msh(file_name + ".msh")
-        for eset in ["SAMPLE_TOP_SURFACE", 
-                     "SAMPLE_BOTTOM_SURFACE"]:
+        for eset in ["SURFACE", "BOTTOM"]:
             mesh.element_set_to_node_set(eset)
             del mesh.elements[("sets", eset, "")]
         mesh.elements = mesh.elements[mesh.space() == 3]
-        mesh.node_set_to_surface("SAMPLE_TOP_SURFACE")
+        mesh.node_set_to_surface("SURFACE")
+        mesh.elements[("sets", "ALL_ELEMENTS", "")] = True
+        if self.element_map != None:
+            mesh = self.element_map(mesh)
+        if self.material_map != None:
+            mesh = self.material_map(mesh)
         self.mesh = mesh    
 
   
@@ -745,6 +898,140 @@ class Step2D:
                            MINFRAMEDURATION = min_frame_duration,
                            FIELD_OUTPUT_FREQUENCY = self.field_output_frequency)                           
 
+
+class Step3DFull:
+    """
+    A general purpose Full 3D indentation step.
+    """
+
+    # PATTERNS
+    _time_discretization_fixed = """
+    *STATIC, DIRECT
+    $FRAMEDURATION, $DURATION
+    """
+    _time_discretization_adapt = """
+    *STATIC
+    $FRAMEDURATION, $DURATION, $MINFRAMEDURATION, $FRAMEDURATION
+    """
+
+    _BC_disp_control = """
+    *BOUNDARY, OP=NEW
+    I_SAMPLE.BOTTOM, 1, 3
+    I_INDENTER.REF_NODE, 1, 2
+    I_INDENTER.REF_NODE, 4, 6
+    I_INDENTER.REF_NODE, 3, 3, $CONTROLLED_VALUE
+    """
+    _BC_force_control = """
+    *BOUNDARY, OP=NEW
+    I_SAMPLE.BOTTOM, 1, 2
+    I_INDENTER.REF_NODE, 4, 6
+    *CLOAD
+    I_INDENTER.REF_NODE, 3, $CONTROLLED_VALUE
+    """
+    _step = """
+    **------------------------------------------------------------------------------
+    ** STEP: $NAME
+    **------------------------------------------------------------------------------
+    *STEP, NAME = $NAME, NLGEOM = YES, INC=1000000
+    $TIME_DISCRETIZATION
+    $BOUNDARY_CONDITIONS
+    *RESTART, WRITE, FREQUENCY = 0
+    *OUTPUT, FIELD, FREQUENCY = $FIELD_OUTPUT_FREQUENCY
+    *NODE OUTPUT
+    COORD, U,
+    *NODE OUTPUT, NSET=I_INDENTER.REF_NODE
+    U
+    *ELEMENT OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS, DIRECTIONS = YES
+    LE, EE, PE, PEEQ, S,
+    *ELEMENT OUTPUT, ELSET=I_INDENTER.ALL_ELEMENTS, DIRECTIONS = YES
+    LE, EE, PE, PEEQ, S,
+    *OUTPUT, HISTORY
+    *ENERGY OUTPUT
+    ALLFD, ALLWK, ALLAE, ALLIE, ALLKE, ALLVD, ETOTAL
+    *ENERGY OUTPUT, ELSET=I_SAMPLE.ALL_ELEMENTS
+    ALLPD, ALLSE
+    *ENERGY OUTPUT, ELSET=I_INDENTER.ALL_ELEMENTS
+    ALLPD, ALLSE
+    *CONTACT OUTPUT, NSET=I_SAMPLE.SURFACE
+    CPRESS
+    *CONTACT OUTPUT
+    CAREA
+    *NODE OUTPUT, NSET=I_INDENTER.REF_NODE
+    U3, RF3, CF3
+    *NODE OUTPUT, NSET=I_INDENTER.TIP_NODE
+    U3
+    *NODE OUTPUT, NSET = I_SAMPLE.SURFACE
+    COOR1, COOR2, COOR3
+    *END STEP"""
+    # ACTUAL METHODS
+
+    def __init__(
+        self,
+        control_type="disp",
+        name="STEP",
+        duration=1.0,
+        nframes=100,
+        kind="fixed",
+        controlled_value=0.1,
+        min_frame_duration=1.0e-8,
+        field_output_frequency=99999,
+        solver="abaqus",
+    ):
+        self.control_type = control_type
+        self.name = name
+        self.duration = duration
+        self.nframes = nframes
+        self.kind = kind
+        self.controlled_value = controlled_value
+        self.min_frame_duration = min_frame_duration
+        self.field_output_frequency = field_output_frequency
+        self.solver = solver
+
+    def get_input(self):
+        control_type = self.control_type
+        name = self.name
+        duration = self.duration
+        nframes = self.nframes
+        kind = self.kind
+        controlled_value = self.controlled_value
+        min_frame_duration = self.min_frame_duration
+        solver = self.solver
+        # rootPath = "/templates/models/indentation_2D/steps/"
+        # rootPath = "/steps/"
+        if solver == "abaqus":
+            # TIME DISCRETIZATION
+            if kind == "fixed":
+                pattern = textwrap.dedent(self._time_discretization_fixed)
+                pattern = Template(pattern.strip())
+                time_discretization = pattern.substitute(
+                    DURATION=duration, FRAMEDURATION=float(duration) / nframes
+                )
+            if kind == "adaptative":
+                pattern = textwrap.dedent(self._time_discretization_adapt)
+                pattern = Template(pattern.strip())
+                time_discretization = pattern.substitute(
+                    DURATION=duration,
+                    FRAMEDURATION=float(duration) / nframes,
+                    MINFRAMEDURATION=min_frame_duration,
+                )
+            # BOUNDARY CONDITIONS:
+            if control_type == "disp":
+                pattern = textwrap.dedent(self._BC_disp_control)
+                BC = Template(pattern.strip())
+            if control_type == "force":
+                pattern = textwrap.dedent(self._BC_force_control)
+                BC = Template(pattern.strip())
+            BC = BC.substitute(CONTROLLED_VALUE=controlled_value)
+            out = Template(textwrap.dedent(self._step).strip())
+            return out.substitute(
+                TIME_DISCRETIZATION=time_discretization,
+                BOUNDARY_CONDITIONS=BC,
+                FIELD_OUTPUT_FREQUENCY=self.field_output_frequency,
+                NAME=name,
+            )
+
+
+
 ################################################################################
 # 2D ABAQUS INPUT FILE
 ################################################################################  
@@ -779,3 +1066,39 @@ def indentation_2D_input(sample_mesh,
     return pattern
   else:
     open(path, "w").write(pattern)  
+    
+def indentation_3D_full_input(
+    sample_mesh,
+    indenter_mesh,
+    steps,
+    materials,
+    friction=0.0,
+    path=None,
+    element_map=None,
+    solver="abaqus",
+    make_mesh=True,
+):
+    """
+  Returns a 3D full indentation input file.
+  """
+    if make_mesh:
+        sample_mesh.make_mesh()
+        indenter_mesh.make_mesh()
+
+    if solver == "abaqus":
+        #template_path = "inp/indentation_3D_full.inp"
+        pattern = Template(
+            open(MODPATH + 
+            "/templates/models/indentation_3D/indentation_3D_full.inp").read())
+        #pattern = Template(open(template_path).read())
+        pattern = pattern.substitute(
+            SAMPLE_MESH=sample_mesh.mesh.write_inp(),
+            INDENTER_MESH=indenter_mesh.mesh.write_inp(),
+            STEPS="".join([step.get_input() for step in steps]),
+            MATERIALS="\n".join([m.write_inp() for m in materials]),
+            FRICTION=friction,
+        )
+    if path == None:
+        return pattern
+    else:
+        open(path, "w").write(pattern)    

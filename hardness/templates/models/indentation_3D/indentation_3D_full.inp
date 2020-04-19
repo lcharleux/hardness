@@ -1,0 +1,45 @@
+**------------------------------------------------------------------------------
+**INDENTATION SIMULATION
+**------------------------------------------------------------------------------
+*HEADING
+Abapy Indentation Simulation
+*PREPRINT, ECHO=NO, MODEL=NO, HISTORY=NO, CONTACT=NO
+**------------------------------------------------------------------------------
+** SAMPLE DEFINITION
+**------------------------------------------------------------------------------
+*PART, NAME = P_SAMPLE
+$SAMPLE_MESH
+*END PART
+**------------------------------------------------------------------------------
+** INDENTER DEFINITION
+**------------------------------------------------------------------------------
+*PART, NAME = P_INDENTER
+$INDENTER_MESH
+*RIGID BODY, REF NODE = REF_NODE, PIN NSET=RIGID_NODES
+*END PART
+**------------------------------------------------------------------------------
+** ASSEMBLY
+**------------------------------------------------------------------------------
+*ASSEMBLY, NAME = ASSEMBLY
+*INSTANCE, NAME = I_SAMPLE, PART = P_SAMPLE
+*END INSTANCE
+*INSTANCE, NAME = I_INDENTER, PART= P_INDENTER
+*END INSTANCE
+*END ASSEMBLY
+**------------------------------------------------------------------------------
+** SURFACE INTERACTIONS
+**------------------------------------------------------------------------------
+*SURFACE INTERACTION, NAME = SURF_INT
+*FRICTION
+$FRICTION,
+*SURFACE BEHAVIOR, PRESSURE-OVERCLOSURE = HARD
+*CONTACT PAIR, INTERACTION = SURF_INT, SUPPLEMENTARY CONSTRAINTS = NO, TYPE= NODE TO SURFACE
+I_SAMPLE.SURFACE, I_INDENTER.SURFACE
+**------------------------------------------------------------------------------
+** MATERIALS
+**------------------------------------------------------------------------------
+$MATERIALS
+**------------------------------------------------------------------------------
+** STEPS
+**------------------------------------------------------------------------------
+$STEPS

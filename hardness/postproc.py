@@ -27,3 +27,14 @@ def indentation_pypostproc(path):
         open(MODPATH + "/templates/models/indentation_2D/indentation_2D_pypostproc.py").read()) 
   pattern = pattern.substitute(simName = simName)
   open(path, "w").write(pattern)     
+  
+  
+def indentation_3D_abqpostproc(path, label, solver = "abaqus"):
+  """
+  Writes the abqpostproc file in the workdir for a 3D indentation.
+  """
+  if solver == "abaqus":
+    pattern = Template(
+          open(MODPATH + "/templates/models/indentation_3D/indentation_3D_abqpostproc.py").read())
+    pattern = pattern.substitute(simName = label)
+    open(path, "w").write(pattern)  
