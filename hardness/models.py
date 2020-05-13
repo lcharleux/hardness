@@ -160,8 +160,9 @@ class Indentation3DFull(argiope.models.Model, argiope.utils.Container):
   3D Full indentation class.
   """
   
-  def __init__(self, friction = 0., *args, **kwargs):
+  def __init__(self, friction = 0., volumic_indenter = True, *args, **kwargs):
     self.friction = friction
+    self.volumic_indenter = volumic_indenter
     argiope.models.Model.__init__(self, *args, **kwargs)
     
   def write_input(self):
@@ -173,6 +174,7 @@ class Indentation3DFull(argiope.models.Model, argiope.utils.Container):
                                    steps = self.steps,
                                    materials = self.materials,
                                    friction = self.friction,
+                                   volumic_indenter = self.volumic_indenter,
                                    solver = self.solver,
                                    path = "{0}/{1}.inp".format(self.workdir,
                                                                self.label))
@@ -274,7 +276,7 @@ class Indentation3DFull(argiope.models.Model, argiope.utils.Container):
             contact_history = pd.concat([coor1d, coor2d, cpressd], axis = 1)
             contact_history.columns = pd.MultiIndex.from_tuples(contact_history.columns)  
             self.data["contact_history"] = contact_history
-    
+            """
             # FIELD OUTPUTS
             files = os.listdir(self.workdir + "reports/")
             files = [f for f in files if f.endswith(".frpt")]
@@ -286,7 +288,7 @@ class Indentation3DFull(argiope.models.Model, argiope.utils.Container):
                     self.parts["sample"].mesh.fields.append(field)
                 if field.part == "I_INDENTER":
                     self.parts["indenter"].mesh.fields.append(field)
-                
+            """    
 ################################################################################
 # MESH PROCESSING
 ################################################################################
@@ -566,12 +568,15 @@ class PyramidalIndenter3DFull(Indenter3D):
     * lc1: characteristic element size at tip.
     * lc2: characteristic element size far from the tip.
     * r1: transition radius for the characteristic length. Below r1 from tip, the elements have a constant size. Above r1, the characteristic length is linerarly increased up to lc2 at Rs distance.
+    * volumic: True for a volumic indenter, False for a surfacic rigid indenter.
     """
     def __init__(self, psi= 65., Nf = 3,
                      Rs = 10., Rt = 1.,
                      blunt = True, 
                      lc1 = 0.05, lc2 = 5., 
-                     r1 = 0.5, *args, **kwargs):
+                     r1 = 0.5, 
+                     volumic = True,
+                     *args, **kwargs):
         self.psi = psi
         self.Nf = Nf
         self.Rs = Rs
@@ -581,6 +586,7 @@ class PyramidalIndenter3DFull(Indenter3D):
         self.lc1 = lc1
         self.lc2 = lc2
         self.r1 = r1
+        self.volumic = volumic
         super().__init__(**kwargs)
     
     def axis_to_edge_angle(self):
@@ -711,29 +717,58 @@ class PyramidalIndenter3DFull(Indenter3D):
         model.mesh.field.setNumber(2, "DistMax", Rs)
 
         model.mesh.field.setAsBackgroundMesh(2)
-         
-         
         factory.synchronize()
-        model.mesh.generate(3)
-        gmsh.write(self.file_name + ".msh")
-        if use_gui:
-            gmsh.fltk.run()
-        gmsh.finalize()
-        mesh = argiope.mesh.read_msh(self.file_name + ".msh")
-        for eset in ["REF_NODE", 
-                     "TIP_NODE",
-                     "RIGID_NODES",
-                     "SURFACE"]:
-            mesh.element_set_to_node_set(eset)
-            del mesh.elements[("sets", eset, "")]
-        mesh.elements = mesh.elements[mesh.space() == 3]
-        mesh.node_set_to_surface("SURFACE")
-        if self.element_map != None:
-            mesh = self.element_map(mesh)
-        if self.material_map != None:
-            mesh = self.material_map(mesh)
-        self.mesh = mesh  
-  
+        if self.volumic: 
+            model.mesh.generate(3)
+            gmsh.write(self.file_name + ".msh")
+            if use_gui:
+                gmsh.fltk.run()
+            gmsh.finalize()
+            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                mesh.element_set_to_node_set(eset)
+                del mesh.elements[("sets", eset, "")]
+            mesh.elements = mesh.elements[mesh.space() == 3]
+            mesh.node_set_to_surface("SURFACE")
+            if self.element_map != None:
+                mesh = self.element_map(mesh)
+            if self.material_map != None:
+                mesh = self.material_map(mesh)
+            self.mesh = mesh  
+        else:
+            model.mesh.generate(2)
+            gmsh.write(self.file_name + ".msh")
+            if use_gui:
+                gmsh.fltk.run()
+            gmsh.finalize()
+            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                mesh.element_set_to_node_set(eset)
+                #del mesh.elements[("sets", eset, "")]
+            mesh.elements = mesh.elements[mesh.elements.sets.SURFACE]
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                del mesh.elements[("sets", eset, "")]
+            
+            #mesh.node_set_to_surface("SURFACE")
+            mesh.nodes[("sets", "RIGID_NODES")] = True
+            mesh.nodes[("sets", "REF_NODE")] = mesh.nodes.sets.TIP_NODE
+            mesh.elements[("sets", "ALL_ELEMENTS", "")] = True
+            mesh.elements[("surfaces", "SURFACE", "SPOS")] = True  
+            if self.element_map != None:
+                mesh = self.element_map(mesh)
+            if self.material_map != None:
+                mesh = self.material_map(mesh)
+            self.mesh = mesh      
+        
 class TransverseFiberSample3D(Sample):
     """
     A Full 3D sample with a tranverse fiber.
@@ -758,6 +793,8 @@ class TransverseFiberSample3D(Sample):
        
     def make_mesh(self, use_gui = False):
         model = gmsh.model
+        print("GMSH VERSION", gmsh.__version__ )
+        print("PATH TO GMSH: ", os.path.dirname(inspect.getfile(gmsh)))
         factory = model.occ
 
         gmsh.initialize()
@@ -1072,6 +1109,7 @@ def indentation_3D_full_input(
     indenter_mesh,
     steps,
     materials,
+    volumic_indenter = True,
     friction=0.0,
     path=None,
     element_map=None,
@@ -1086,14 +1124,26 @@ def indentation_3D_full_input(
         indenter_mesh.make_mesh()
 
     if solver == "abaqus":
+        if volumic_indenter:
+            sections = "solid"
+        if not volumic_indenter:
+            sections = "shell"
+            
         #template_path = "inp/indentation_3D_full.inp"
         pattern = Template(
             open(MODPATH + 
             "/templates/models/indentation_3D/indentation_3D_full.inp").read())
         #pattern = Template(open(template_path).read())
+        orientation = """
+        *ORIENTATION, NAME=REF_FRAME, SYSTEM=RECTANGULAR, DEFINITION=COORDINATES
+        1., 0., 0., 0, 1., 0., 0., 0., 0.,        
+        *SOLID SECTION, ELSET=_MAT_MATRIX_MAT, MATERIAL=MATRIX_MAT, ORIENTATION=REF_FRAME
+        *SOLID SECTION, ELSET=_MAT_FIBER_MAT, MATERIAL=FIBER_MAT, ORIENTATION=REF_FRAME
+        """
         pattern = pattern.substitute(
-            SAMPLE_MESH=sample_mesh.mesh.write_inp(),
-            INDENTER_MESH=indenter_mesh.mesh.write_inp(),
+            SAMPLE_MESH= (sample_mesh.mesh.write_inp(sections = None) 
+                          + "\n" + textwrap.dedent(orientation).strip()),
+            INDENTER_MESH=indenter_mesh.mesh.write_inp(sections = sections),
             STEPS="".join([step.get_input() for step in steps]),
             MATERIALS="\n".join([m.write_inp() for m in materials]),
             FRICTION=friction,
