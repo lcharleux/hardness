@@ -777,18 +777,22 @@ class TransverseFiberSample3D(Sample):
     * Rf: fiber radius
     * Rs: radius of the outer sphere
     * lc1: characteristic element size at tip.
-    * lc2: characteristic element size far from the tip.
+    * lc2: characteristic element size far from the tip. If None, automatically set to an optimal value.
+    * lcf: characteristic element inside the fibre far from the contact point. If None, automatically set to an optimal value.
     * r1: transition radius for the characteristic length. Below r1 from tip, the elements have a constant size. Above r1, the characteristic length is linerarly increased up to lc2 at Rs distance.
     """
     def __init__(self, Rf = 1., Rs = 10., 
-                     lc1 = 0.05, lc2 = 5., 
+                     lc1 = 0.05, lc2 = None, lcf = None,
                      r1 = 0.5, *args, **kwargs):
+        if lcf is None: lcf = Rf / 3.
+        if lc2 is None: lc2 = Rs / 3.
         self.Rf = Rf
         self.Rs = Rs
         self.r1 = r1
         self.lc1 = lc1
         self.lc2 = lc2
         self.r1 = r1
+        self.lcf = lcf
         super().__init__(**kwargs)
        
     def make_mesh(self, use_gui = False):
@@ -807,6 +811,7 @@ class TransverseFiberSample3D(Sample):
         Rf = self.Rf
         Rs = self.Rs
         r1 = self.r1
+        lcf = self.lcf
 
         lx, ly, lz = 2.*Rs, 2.*Rs, 2.*Rs # Box shape
         factory.addCylinder(-2*lx, 0., 0., 4*lx, 0., 0., Rf, 1)
@@ -839,15 +844,35 @@ class TransverseFiberSample3D(Sample):
 
         # MESH CONTROL
         top_point = factory.addPoint(0., 0., 0.)
+        fiber_ext0 = factory.addPoint(-Rs, 0., 0.)
+        fiber_ext1 = factory.addPoint( Rs, 0., 0.)
+        fiber_axis = factory.addLine(fiber_ext0, fiber_ext1)
+
+
+
         model.mesh.field.add("Distance", 1)
         model.mesh.field.setNumbers(1, "NodesList", [top_point])
-        model.mesh.field.add("Threshold", 2);
-        model.mesh.field.setNumber(2, "IField", 1);
+        model.mesh.field.add("Threshold", 2)
+        model.mesh.field.setNumber(2, "IField", 1)
         model.mesh.field.setNumber(2, "LcMin", lc1)
         model.mesh.field.setNumber(2, "LcMax", lc2)
         model.mesh.field.setNumber(2, "DistMin", r1)
-        model.mesh.field.setNumber(2, "DistMax", Rs)
-        model.mesh.field.setAsBackgroundMesh(2)
+        model.mesh.field.setNumber(2, "DistMax", Rs/2)
+
+        model.mesh.field.add("Distance", 3)
+        model.mesh.field.setNumbers(3, "EdgesList", [fiber_axis])
+        model.mesh.field.setNumber(3, "NNodesByEdge", Rs/Rf*100)
+        model.mesh.field.add("Threshold", 4)
+        model.mesh.field.setNumber(4, "IField", 3)
+        model.mesh.field.setNumber(4, "LcMin", lcf)
+        model.mesh.field.setNumber(4, "LcMax", lc2)
+        model.mesh.field.setNumber(4, "DistMin", Rf)
+        model.mesh.field.setNumber(4, "DistMax", Rf*2)
+
+        model.mesh.field.add("Min", 5)
+        model.mesh.field.setNumbers(5, "FieldsList", [2,4])
+
+        model.mesh.field.setAsBackgroundMesh(5)
 
         # WRITE
         factory.synchronize()
