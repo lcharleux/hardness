@@ -9,8 +9,106 @@ import textwrap
 # PATH TO MODULE
 import hardness
 MODPATH = os.path.dirname(inspect.getfile(hardness))
+from scipy import spatial
 
 
+################################################################################
+# GMSH / OPENCASCADE UTILITIES
+################################################################################
+def occ_angular_z_keep(factory, keep, H):
+    center = factory.addPoint(0., 0., -H/2)
+    p0 = factory.addPoint(H/2*np.cos(np.radians(keep[0])), H/2*np.sin(np.radians(keep[0])), -H/2)
+    pCirc = [p0]
+    sector = keep[1] - keep[0]       
+    a = keep[0]
+    while sector > 90.:
+        a += 90.
+        p = factory.addPoint(H/2*np.cos(np.radians(a)), H/2*np.sin(np.radians(a)), -H/2)
+        pCirc.append(p)
+        sector -= 90.
+    a += sector        
+    p = factory.addPoint(H/2*np.cos(np.radians(a)), H/2*np.sin(np.radians(a)), -H/2)
+    pCirc.append(p)
+    loop = []
+    loop.append( factory.addLine(center, pCirc[0]))
+    for i in range(len(pCirc)-1):
+        loop.append(factory.addCircleArc(pCirc[i], center, pCirc[i+1]))
+    loop.append( factory.addLine(pCirc[-1], center))
+    cloop = factory.addCurveLoop(loop)
+    sloop = factory.addSurfaceFilling(cloop) 
+    vKeep = factory.extrude([(2, sloop)], 0., 0., H)
+    return vKeep[1]
+
+def get_zrot_cut_plane_equation(angle, unit = "deg"):
+    """
+    Equation of a cut plane using z rotation.
+    """
+    if unit == "deg":
+        a = np.radians(angle)
+    else:
+        a = angle
+    return np.array([-np.sin(a), np.cos(a), 0.])
+
+def get_points_in_surfaces(model):
+    """
+    Analyzes points in surfaces
+    """
+    points = {}
+    for pDimTag in model.getEntities(0):
+        label = pDimTag[1]
+        coords =  model.getValue( 0, pDimTag[1], [])
+        points[pDimTag[1]] = coords
+    points = pd.DataFrame(points).transpose()
+    points.columns = list("xyz")
+
+    surfaces = pd.DataFrame()
+    surfaces["points"] = np.nan
+    surfaces["points"] = surfaces["points"].astype("object") 
+    surfaces.index.name   
+    for sDimTag in model.getEntities(2):
+        bound = model.getBoundary( sDimTag, combined = False, recursive = True )
+        bound = set(np.array(bound)[:, 1])
+        surfaces.at[sDimTag[1], "points"] = sorted(list(bound))
+        surfaces.at[sDimTag[1], "type"] = model.getType(*sDimTag)
+    return points, surfaces
+
+def add_partial_physical_groups(model, keep):
+    model.occ.synchronize()
+    points, surfaces = get_points_in_surfaces(model)
+    planar_surf = surfaces[surfaces.type == "Plane"] 
+    tol = 1.e-12    
+    cut_surfaces = [[], []]
+    for i in range(2):
+        equation = get_zrot_cut_plane_equation(keep[i])
+        for s in planar_surf.iterrows():
+            residuals = (equation * points.loc[s[1].points].values).std()   
+            if residuals <= tol:
+                cut_surfaces[i].append(s[0])
+    model.addPhysicalGroup(2, cut_surfaces[0], 3)
+    model.setPhysicalName(2, 3, "CUT_SURFACE_0")
+    model.addPhysicalGroup(2, cut_surfaces[1], 4)
+    model.setPhysicalName(2, 4, "CUT_SURFACE_1")
+
+def cut_partial(model, keep, H):
+    factory = model.occ
+    factory.synchronize()
+    volumes = model.getEntities(3)
+    for volume in volumes:  
+        vKeep = occ_angular_z_keep(factory, keep, H)
+        factory.intersect([volume], [vKeep], removeTool = True)
+        
+def define_cut_node_sets(mesh):
+    """
+    Defines the nodes sets resulting from the partial cutting.
+    """
+    for eset in ["CUT_SURFACE_{0}".format(i) for i in range(2)]: 
+                        mesh.element_set_to_node_set(eset)
+                        del mesh.elements[("sets", eset, "")]
+    mesh.nodes[("sets", "AXIS")] = (mesh.nodes.sets.CUT_SURFACE_0 & 
+                                   mesh.nodes.sets.CUT_SURFACE_1 )
+    for i in range(2):
+        mesh.nodes.loc[mesh.nodes.sets.AXIS, 
+                       ("sets", "CUT_SURFACE_{0}".format(i))] = False            
 ################################################################################
 # MODEL DEFINITION
 ################################################################################
@@ -547,7 +645,10 @@ class SpheroconicalIndenter2D(Indenter2D):
        y6 = y6)
     open(self.workdir + self.file_name + ".geo", "w").write(geo)
   
-# 3D INDENTERS
+# 3D INDENTERS AND SAMPLES
+
+
+    
 
 class Indenter3D(Indenter):
     """
@@ -567,6 +668,7 @@ class PyramidalIndenter3DFull(Indenter3D):
     * Rt: tip and edge radius
     * lc1: characteristic element size at tip.
     * lc2: characteristic element size far from the tip.
+    * lce: characteristic element size along edges (if None: automatic)
     * r1: transition radius for the characteristic length. Below r1 from tip, the elements have a constant size. Above r1, the characteristic length is linerarly increased up to lc2 at Rs distance.
     * volumic: True for a volumic indenter, False for a surfacic rigid indenter.
     """
@@ -574,6 +676,7 @@ class PyramidalIndenter3DFull(Indenter3D):
                      Rs = 10., Rt = 1.,
                      blunt = True, 
                      lc1 = 0.05, lc2 = 5., 
+                     lce = None,
                      r1 = 0.5, 
                      volumic = True,
                      *args, **kwargs):
@@ -585,6 +688,7 @@ class PyramidalIndenter3DFull(Indenter3D):
         self.blunt = blunt
         self.lc1 = lc1
         self.lc2 = lc2
+        self.lce = lce
         self.r1 = r1
         self.volumic = volumic
         super().__init__(**kwargs)
@@ -621,7 +725,11 @@ class PyramidalIndenter3DFull(Indenter3D):
         Rs = self.Rs
         Rt = self.Rt
         blunt = self.blunt
-
+        lc1 = self.lc1
+        lc2 = self.lc2 
+        lce = self.lce
+        r1 = self.r1
+        
         # MATH
         phi = np.radians(self.axis_to_edge_angle())
         deltah = self.delta_h()
@@ -711,11 +819,204 @@ class PyramidalIndenter3DFull(Indenter3D):
         model.mesh.field.setNumbers(1, "NodesList", [tip_point])
         model.mesh.field.add("Threshold", 2);
         model.mesh.field.setNumber(2, "IField", 1);
-        model.mesh.field.setNumber(2, "LcMin", self.lc1)
-        model.mesh.field.setNumber(2, "LcMax", self.lc2)
-        model.mesh.field.setNumber(2, "DistMin", self.r1)
+        model.mesh.field.setNumber(2, "LcMin", lc1)
+        model.mesh.field.setNumber(2, "LcMax", lc2)
+        model.mesh.field.setNumber(2, "DistMin", r1)
         model.mesh.field.setNumber(2, "DistMax", Rs)
 
+        # GET POINTS ON THE EXTREMITIES OF THE EDGES
+        def get_edge_points(coordinates, points, model):
+            z = coordinates[:, 2] 
+            rxy = (coordinates[:,:2]**2).sum(axis=1)**.5  
+            loc = (rxy>=rxy.max()*.999) 
+            p = points[loc] 
+            zp = z[loc]          
+            zp <= zp.min()*1.001 
+            edge_points =  p[zp <= zp.min()*1.001]    
+            curves = model.getEntities(1)
+            sphere_points = set(np.array(model.getBoundary((2,1), recursive = True))[:,1])
+            edges = []
+            for c in curves:
+                pts = np.array(model.getBoundary(c))
+                if len(pts) == 2:
+                    pts = set(pts[:,1]) 
+                    if (len(pts.intersection(edge_points)) >=1 and 
+                    len(pts.intersection(sphere_points)) >=1) :
+                        edges.append(c) 
+            return edges
+
+        edges = get_edge_points(coordinates, points, model)
+        sphere_points = np.array(model.getBoundary((2,1), recursive = True))[:,1]
+        sc = coordinates[np.isin(points, sphere_points)]  
+        edge_size = spatial.distance.pdist(sc).max()  
+        if lce is None: lce = edge_size / 4
+        for i in range(Nf):
+            model.mesh.field.add("Distance", i*2+3)
+            model.mesh.field.setNumbers(i*2+3, "EdgesList", [edges[i][1]])
+            model.mesh.field.setNumber(i*2+3, "NNodesByEdge", 100 * Rs / edge_size)
+            model.mesh.field.add("Threshold", i*2+4)
+            model.mesh.field.setNumber(i*2+4, "IField", i*2+3)
+            model.mesh.field.setNumber(i*2+4, "LcMin", lce)
+            model.mesh.field.setNumber(i*2+4, "LcMax", lc2)
+            model.mesh.field.setNumber(i*2+4, "DistMin", edge_size)
+            model.mesh.field.setNumber(i*2+4, "DistMax", edge_size * 2)
+
+        model.mesh.field.add("Min", Nf*2+5)
+        model.mesh.field.setNumbers(Nf*2+5, "FieldsList", [i*2+2 for i in range(Nf+1)])
+
+        model.mesh.field.setAsBackgroundMesh(Nf*2+5)
+        factory.synchronize()
+        if self.volumic: 
+            model.mesh.generate(3)
+            gmsh.write(self.file_name + ".msh")
+            if use_gui:
+                gmsh.fltk.run()
+            gmsh.finalize()
+            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                mesh.element_set_to_node_set(eset)
+                del mesh.elements[("sets", eset, "")]
+            mesh.elements = mesh.elements[mesh.space() == 3]
+            mesh.node_set_to_surface("SURFACE")
+            if self.element_map != None:
+                mesh = self.element_map(mesh)
+            if self.material_map != None:
+                mesh = self.material_map(mesh)
+            self.mesh = mesh  
+        else:
+            model.mesh.generate(2)
+            gmsh.write(self.file_name + ".msh")
+            if use_gui:
+                gmsh.fltk.run()
+            gmsh.finalize()
+            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                mesh.element_set_to_node_set(eset)
+                #del mesh.elements[("sets", eset, "")]
+            mesh.elements = mesh.elements[mesh.elements.sets.SURFACE]
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                del mesh.elements[("sets", eset, "")]
+            
+            #mesh.node_set_to_surface("SURFACE")
+            mesh.nodes[("sets", "RIGID_NODES")] = True
+            mesh.nodes[("sets", "REF_NODE")] = mesh.nodes.sets.TIP_NODE
+            mesh.elements[("sets", "ALL_ELEMENTS", "")] = True
+            mesh.elements[("surfaces", "SURFACE", "SPOS")] = True  
+            if self.element_map != None:
+                mesh = self.element_map(mesh)
+            if self.material_map != None:
+                mesh = self.material_map(mesh)
+            self.mesh = mesh      
+
+
+
+class SpheroconicalIndenter3DFull(Indenter3D):
+    """
+    A Full 3D spheroconical indenter class.
+
+    Args:
+    * psi: axis to face angle (in degrees).
+    * Rs: radius of the outer sphere
+    * Rt: tip and edge radius
+    * lc1: characteristic element size at tip.
+    * lc2: characteristic element size far from the tip.
+    * r1: transition radius for the characteristic length. Below r1 from tip, the elements have a constant size. Above r1, the characteristic length is linerarly increased up to lc2 at Rs distance.
+    * volumic: True for a volumic indenter, False for a surfacic rigid indenter.
+    """
+    def __init__(self, psi= 65., 
+                     Rs = 10., Rt = 1.,
+                     lc1 = 0.05, lc2 = 5., 
+                     r1 = 0.5, 
+                     volumic = True,
+                     *args, **kwargs):
+        self.psi = psi
+        self.Rs = Rs
+        self.Rt = Rt
+        self.r1 = r1
+        self.lc1 = lc1
+        self.lc2 = lc2
+        self.r1 = r1
+        self.volumic = volumic
+        super().__init__(**kwargs)
+    
+      
+    def delta_h(self):
+        """
+        Returns the missing tip length delta h.
+        """
+        return self.Rt * (np.sin(np.radians(self.psi))**-1 - 1. )
+    
+    def make_mesh(self, use_gui = False):
+        """
+        Generates the mesh.
+        """
+        # MODEL SETUP
+        model = gmsh.model
+        factory = model.occ
+        gmsh.initialize()
+        gmsh.option.setNumber("General.Terminal", 1)
+        gmsh.option.setNumber("Mesh.Algorithm", 6);
+        model.add("indenter")
+
+        # DATA
+        psi =  np.radians(self.psi) # Axis to face angle
+        Rs = self.Rs
+        Rt = self.Rt
+        lc1 = self.lc1
+        lc2 = self.lc2 
+        r1 = self.r1
+        
+        # MATH
+        deltah = self.delta_h()
+
+        # CONE
+        cone = factory.addCone(0., 0., -deltah, 0., 0., Rs*2, 0, Rs * 2 * np.tan(psi))
+        # SPHERE
+        sphere = factory.addSphere(0., 0., Rt, Rt)
+        # CUT & FUSE
+        cut_tags = factory.cut([(3, cone)], [(3, sphere)], removeTool = False)
+        factory.remove([(3, 4)], recursive = True)
+        fused = factory.fuse([(3,2)], [(3,3)], removeTool = True)[0]
+        # OUTER SPHERE
+        outer_sphere = factory.addSphere(0., 0., 0., Rs)
+        cut_tags = factory.intersect([(3, 1)], [(3, outer_sphere)], removeTool = True)
+        # ANALYZE
+        factory.synchronize()
+        points =  np.array(model.getEntities(0))[:, 1] 
+        coordinates = np.array([model.getValue( 0, p, []) for p in points])
+        tip_point = points[ coordinates[:,2] == coordinates[:,2].min()][0] 
+        top_point = points[ coordinates[:,2] == coordinates[:,2].max()][0] 
+        # POINTS
+        model.addPhysicalGroup(0, [top_point], 1)
+        model.setPhysicalName(0, 1, "REF_NODE")
+        model.addPhysicalGroup(0, [tip_point], 2)
+        model.setPhysicalName(0, 2, "TIP_NODE")
+        # SURFACES
+        model.addPhysicalGroup(2, [3], 1)
+        model.setPhysicalName(2, 1, "RIGID_NODES")
+        model.addPhysicalGroup(2, [1,2], 2)
+        model.setPhysicalName(2, 2, "SURFACE")
+        # VOLUMES
+        model.addPhysicalGroup(3, [1], 1)
+        model.setPhysicalName(3, 1, "ALL_ELEMENTS")
+        # MESH CONTROL
+        model.mesh.field.add("Distance", 1)
+        model.mesh.field.setNumbers(1, "NodesList", [tip_point])
+        model.mesh.field.add("Threshold", 2);
+        model.mesh.field.setNumber(2, "IField", 1);
+        model.mesh.field.setNumber(2, "LcMin", lc1)
+        model.mesh.field.setNumber(2, "LcMax", lc2)
+        model.mesh.field.setNumber(2, "DistMin", r1)
+        model.mesh.field.setNumber(2, "DistMax", Rs)
         model.mesh.field.setAsBackgroundMesh(2)
         factory.synchronize()
         if self.volumic: 
@@ -768,6 +1069,177 @@ class PyramidalIndenter3DFull(Indenter3D):
             if self.material_map != None:
                 mesh = self.material_map(mesh)
             self.mesh = mesh      
+
+
+class SpheroconicalIndenter3D(Indenter3D):
+    """
+    A generic (full and partial) 3D spheroconical indenter class.
+
+    Args:
+    * psi: axis to face angle (in degrees).
+    * Rs: radius of the outer sphere
+    * Rt: tip and edge radius
+    * lc1: characteristic element size at tip.
+    * lc2: characteristic element size far from the tip.
+    * r1: transition radius for the characteristic length. Below r1 from tip, the elements have a constant size. Above r1, the characteristic length is linerarly increased up to lc2 at Rs distance.
+    * volumic: True for a volumic indenter, False for a surfacic rigid indenter.
+    """
+    def __init__(self, psi= 65., 
+                     Rs = 10., Rt = 1.,
+                     lc1 = 0.05, lc2 = 5., 
+                     r1 = 0.5, 
+                     volumic = True,
+                     cut = False,
+                     keep = [0., 90.],
+                     *args, **kwargs):
+        self.psi = psi
+        self.Rs = Rs
+        self.Rt = Rt
+        self.r1 = r1
+        self.lc1 = lc1
+        self.lc2 = lc2
+        self.r1 = r1
+        self.volumic = volumic
+        self.cut = cut
+        self.keep = keep
+        super().__init__(**kwargs)
+    
+      
+    def delta_h(self):
+        """
+        Returns the missing tip length delta h.
+        """
+        return self.Rt * (np.sin(np.radians(self.psi))**-1 - 1. )
+    
+    def make_mesh(self, use_gui = False):
+        """
+        Generates the mesh.
+        """
+        # MODEL SETUP
+        model = gmsh.model
+        factory = model.occ
+        gmsh.initialize()
+        gmsh.option.setNumber("General.Terminal", 1)
+        gmsh.option.setNumber("Mesh.Algorithm", 6);
+        model.add("indenter")
+
+        # DATA
+        psi =  np.radians(self.psi) # Axis to face angle
+        Rs = self.Rs
+        Rt = self.Rt
+        lc1 = self.lc1
+        lc2 = self.lc2 
+        r1 = self.r1
+        cut = self.cut
+        keep = self.keep
+        
+        # MATH
+        deltah = self.delta_h()
+        # CONE
+        cone = factory.addCone(0., 0., -deltah, 0., 0., Rs*2, 0, Rs * 2 * np.tan(psi))
+        # SPHERE
+        sphere = factory.addSphere(0., 0., Rt, Rt)
+        # CUT & FUSE
+        cut_tags = factory.cut([(3, cone)], [(3, sphere)], removeTool = False)
+        factory.remove([(3, 4)], recursive = True)
+        fused = factory.fuse([(3,2)], [(3,3)], removeTool = True)[0]
+        # OUTER SPHERE
+        outer_sphere = factory.addSphere(0., 0., 0., Rs)
+        cut_tags = factory.intersect([(3, 1)], [(3, outer_sphere)], removeTool = True)
+        # CUT
+        if cut: hd.models.cut_partial(model, keep, 2*Rs)
+        # ANALYZE
+        factory.synchronize()
+        points, surfaces = hd.models.get_points_in_surfaces(model)
+        # POINTS
+        points.sort_values("z", inplace = True)  
+        top_point = points.index[-1]
+        tip_point = points.index[0]                              
+        model.addPhysicalGroup(0, [points.index[-1]], 1)
+        model.setPhysicalName(0, 1, "REF_NODE")
+        model.addPhysicalGroup(0, [points.index[0]], 2)
+        model.setPhysicalName(0, 2, "TIP_NODE")
+        # SURFACES
+        bottom_surf = [s[0] for s in surfaces.iterrows() 
+                       if tip_point in s[1].points 
+                       and s[1].type == "Sphere"] # Bottom sphere  
+        bottom_surf += surfaces[surfaces.type == "Cone"].index.tolist() # Cone
+        top_surf =  list(set(surfaces[surfaces.type == "Sphere"].index) - set(bottom_surf))
+        model.addPhysicalGroup(2, top_surf, 1)
+        model.setPhysicalName(2, 1, "RIGID_NODES")
+        model.addPhysicalGroup(2, bottom_surf, 2)
+        model.setPhysicalName(2, 2, "SURFACE")
+        if cut: hd.models.add_partial_physical_groups(model, keep)
+        # VOLUMES
+        model.addPhysicalGroup(3, [1], 1)
+        model.setPhysicalName(3, 1, "ALL_ELEMENTS")
+        # MESH CONTROL
+        model.mesh.field.add("Distance", 1)
+        model.mesh.field.setNumbers(1, "NodesList", [tip_point])
+        model.mesh.field.add("Threshold", 2);
+        model.mesh.field.setNumber(2, "IField", 1);
+        model.mesh.field.setNumber(2, "LcMin", lc1)
+        model.mesh.field.setNumber(2, "LcMax", lc2)
+        model.mesh.field.setNumber(2, "DistMin", r1)
+        model.mesh.field.setNumber(2, "DistMax", Rs)
+        model.mesh.field.setAsBackgroundMesh(2)
+        factory.synchronize()
+        if self.volumic: 
+            model.mesh.generate(3)
+            gmsh.write(self.file_name + ".msh")
+            if use_gui:
+                gmsh.fltk.run()
+            gmsh.finalize()
+            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                mesh.element_set_to_node_set(eset)
+                del mesh.elements[("sets", eset, "")]
+            if cut: define_cut_node_sets(mesh)  
+                     
+            mesh.elements = mesh.elements[mesh.space() == 3]
+            mesh.node_set_to_surface("SURFACE")
+            if self.element_map != None:
+                mesh = self.element_map(mesh)
+            if self.material_map != None:
+                mesh = self.material_map(mesh)
+            self.mesh = mesh  
+        else:
+            model.mesh.generate(2)
+            gmsh.write(self.file_name + ".msh")
+            if use_gui:
+                gmsh.fltk.run()
+            gmsh.finalize()
+            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                mesh.element_set_to_node_set(eset)
+                #del mesh.elements[("sets", eset, "")]
+            mesh.elements = mesh.elements[mesh.elements.sets.SURFACE]
+            for eset in ["REF_NODE", 
+                         "TIP_NODE",
+                         "RIGID_NODES",
+                         "SURFACE"]:
+                del mesh.elements[("sets", eset, "")]
+            
+            #mesh.node_set_to_surface("SURFACE")
+            mesh.nodes[("sets", "RIGID_NODES")] = True
+            mesh.nodes[("sets", "REF_NODE")] = mesh.nodes.sets.TIP_NODE
+            mesh.elements[("sets", "ALL_ELEMENTS", "")] = True
+            mesh.elements[("surfaces", "SURFACE", "SPOS")] = True  
+            if self.element_map != None:
+                mesh = self.element_map(mesh)
+            if self.material_map != None:
+                mesh = self.material_map(mesh)
+            self.mesh = mesh      
+
+
+
+
         
 class TransverseFiberSample3D(Sample):
     """
@@ -783,7 +1255,10 @@ class TransverseFiberSample3D(Sample):
     """
     def __init__(self, Rf = 1., Rs = 10., 
                      lc1 = 0.05, lc2 = None, lcf = None,
-                     r1 = 0.5, *args, **kwargs):
+                     r1 = 0.5, 
+                     cut = False,
+                     keep = [0., 90.],
+                     *args, **kwargs):
         if lcf is None: lcf = Rf / 3.
         if lc2 is None: lc2 = Rs / 3.
         self.Rf = Rf
@@ -793,6 +1268,9 @@ class TransverseFiberSample3D(Sample):
         self.lc2 = lc2
         self.r1 = r1
         self.lcf = lcf
+        self.cut = cut
+        self.keep = keep
+        
         super().__init__(**kwargs)
        
     def make_mesh(self, use_gui = False):
@@ -812,6 +1290,8 @@ class TransverseFiberSample3D(Sample):
         Rs = self.Rs
         r1 = self.r1
         lcf = self.lcf
+        cut = self.cut
+        keep = self.keep
 
         lx, ly, lz = 2.*Rs, 2.*Rs, 2.*Rs # Box shape
         factory.addCylinder(-2*lx, 0., 0., 4*lx, 0., 0., Rf, 1)
@@ -831,25 +1311,47 @@ class TransverseFiberSample3D(Sample):
         # WHY FRAGMENT ?: TO ENSURE COHERENCE BETWEEN THE TWO MESHES
         out = factory.fragment( [(3,7)], [(3,6)], removeObject = True, removeTool = True)
 
+        # CREATE A POINT AT THE SURFACE IN (0, 0, 0)
+        # CUT
+        if cut: 
+            hd.models.cut_partial(model, keep, 2*Rs)
+        else:
+            contact_point = factory.addPoint(0., 0., 0.)
+            factory.synchronize()
+            model.mesh.embed(0, [contact_point], 2, 5)
+            
         # MODEL ANALYSIS
         factory.synchronize()
-        model.addPhysicalGroup(2, [1, 4, 5], 1)
+        points, surfaces = hd.models.get_points_in_surfaces(model)
+        contact_point = points[(points.x == 0.) & (points.y==0.) & (points.z==0.)].index[0]
+        model.addPhysicalGroup(0, [contact_point], 1)
+        model.setPhysicalName(0, 1, "CONTACT_POINT")    
+        surface_points = set(points[points.z >= -Rf/10.].index.values)
+        top_surfaces = [s[0] for s in surfaces.iterrows() if set(s[1].points).issubset(surface_points)]
+        model.addPhysicalGroup(2, top_surfaces, 1)
         model.setPhysicalName(2, 1, "SURFACE")
-        model.addPhysicalGroup(2, [2, 6, 7, 8], 2)
+        bot_surfaces = surfaces[surfaces.type == "Sphere"].index.values 
+        model.addPhysicalGroup(2, bot_surfaces, 2)
         model.setPhysicalName(2, 2, "BOTTOM")
-        model.addPhysicalGroup(3, [6], 1)
+        volumes = model.getEntities(3)
+        bot_point = points[points.z == points.z.min()].index.values[0]
+        for volume in volumes:
+            points_in_volume = np.array(model.getBoundary(volume, recursive = True))[:, 1]
+            if bot_point in points_in_volume:
+                matrix = volume[1]
+        fiber = [v[1] for v in volumes if v[1] != matrix][0]      
+        model.addPhysicalGroup(3, [fiber], 1)
         model.setPhysicalName(3, 1, "FIBER")
-        model.addPhysicalGroup(3, [7], 2)
+        model.addPhysicalGroup(3, [matrix], 2)
         model.setPhysicalName(3, 2, "MATRIX")
-
+        if cut: hd.models.add_partial_physical_groups(model, keep)
         # MESH CONTROL
         top_point = factory.addPoint(0., 0., 0.)
         fiber_ext0 = factory.addPoint(-Rs, 0., 0.)
         fiber_ext1 = factory.addPoint( Rs, 0., 0.)
         fiber_axis = factory.addLine(fiber_ext0, fiber_ext1)
-
-
-
+        
+        
         model.mesh.field.add("Distance", 1)
         model.mesh.field.setNumbers(1, "NodesList", [top_point])
         model.mesh.field.add("Threshold", 2)
@@ -887,6 +1389,7 @@ class TransverseFiberSample3D(Sample):
         for eset in ["SURFACE", "BOTTOM"]:
             mesh.element_set_to_node_set(eset)
             del mesh.elements[("sets", eset, "")]
+        if cut: define_cut_node_sets(mesh)      
         mesh.elements = mesh.elements[mesh.space() == 3]
         mesh.node_set_to_surface("SURFACE")
         mesh.elements[("sets", "ALL_ELEMENTS", "")] = True
