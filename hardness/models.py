@@ -253,14 +253,16 @@ class ConicalIndentation2D(Indentation2D):
         return 
         #self. 
         
-class Indentation3DFull(argiope.models.Model, argiope.utils.Container):
+class Indentation3D(argiope.models.Model, argiope.utils.Container):
   """
-  3D Full indentation class.
+  3D indentation class.
   """
   
-  def __init__(self, friction = 0., volumic_indenter = True, *args, **kwargs):
+  def __init__(self, friction = 0., volumic_indenter = True, 
+               cut = False, *args, **kwargs):
     self.friction = friction
     self.volumic_indenter = volumic_indenter
+    self.cut = cut
     argiope.models.Model.__init__(self, *args, **kwargs)
     
   def write_input(self):
@@ -275,7 +277,8 @@ class Indentation3DFull(argiope.models.Model, argiope.utils.Container):
                                    volumic_indenter = self.volumic_indenter,
                                    solver = self.solver,
                                    path = "{0}/{1}.inp".format(self.workdir,
-                                                               self.label))
+                                                               self.label),
+                                   cut = self.cut)
                                    
                                    
     
@@ -917,160 +920,6 @@ class PyramidalIndenter3DFull(Indenter3D):
                 mesh = self.material_map(mesh)
             self.mesh = mesh      
 
-
-
-class SpheroconicalIndenter3DFull(Indenter3D):
-    """
-    A Full 3D spheroconical indenter class.
-
-    Args:
-    * psi: axis to face angle (in degrees).
-    * Rs: radius of the outer sphere
-    * Rt: tip and edge radius
-    * lc1: characteristic element size at tip.
-    * lc2: characteristic element size far from the tip.
-    * r1: transition radius for the characteristic length. Below r1 from tip, the elements have a constant size. Above r1, the characteristic length is linerarly increased up to lc2 at Rs distance.
-    * volumic: True for a volumic indenter, False for a surfacic rigid indenter.
-    """
-    def __init__(self, psi= 65., 
-                     Rs = 10., Rt = 1.,
-                     lc1 = 0.05, lc2 = 5., 
-                     r1 = 0.5, 
-                     volumic = True,
-                     *args, **kwargs):
-        self.psi = psi
-        self.Rs = Rs
-        self.Rt = Rt
-        self.r1 = r1
-        self.lc1 = lc1
-        self.lc2 = lc2
-        self.r1 = r1
-        self.volumic = volumic
-        super().__init__(**kwargs)
-    
-      
-    def delta_h(self):
-        """
-        Returns the missing tip length delta h.
-        """
-        return self.Rt * (np.sin(np.radians(self.psi))**-1 - 1. )
-    
-    def make_mesh(self, use_gui = False):
-        """
-        Generates the mesh.
-        """
-        # MODEL SETUP
-        model = gmsh.model
-        factory = model.occ
-        gmsh.initialize()
-        gmsh.option.setNumber("General.Terminal", 1)
-        gmsh.option.setNumber("Mesh.Algorithm", 6);
-        model.add("indenter")
-
-        # DATA
-        psi =  np.radians(self.psi) # Axis to face angle
-        Rs = self.Rs
-        Rt = self.Rt
-        lc1 = self.lc1
-        lc2 = self.lc2 
-        r1 = self.r1
-        
-        # MATH
-        deltah = self.delta_h()
-
-        # CONE
-        cone = factory.addCone(0., 0., -deltah, 0., 0., Rs*2, 0, Rs * 2 * np.tan(psi))
-        # SPHERE
-        sphere = factory.addSphere(0., 0., Rt, Rt)
-        # CUT & FUSE
-        cut_tags = factory.cut([(3, cone)], [(3, sphere)], removeTool = False)
-        factory.remove([(3, 4)], recursive = True)
-        fused = factory.fuse([(3,2)], [(3,3)], removeTool = True)[0]
-        # OUTER SPHERE
-        outer_sphere = factory.addSphere(0., 0., 0., Rs)
-        cut_tags = factory.intersect([(3, 1)], [(3, outer_sphere)], removeTool = True)
-        # ANALYZE
-        factory.synchronize()
-        points =  np.array(model.getEntities(0))[:, 1] 
-        coordinates = np.array([model.getValue( 0, p, []) for p in points])
-        tip_point = points[ coordinates[:,2] == coordinates[:,2].min()][0] 
-        top_point = points[ coordinates[:,2] == coordinates[:,2].max()][0] 
-        # POINTS
-        model.addPhysicalGroup(0, [top_point], 1)
-        model.setPhysicalName(0, 1, "REF_NODE")
-        model.addPhysicalGroup(0, [tip_point], 2)
-        model.setPhysicalName(0, 2, "TIP_NODE")
-        # SURFACES
-        model.addPhysicalGroup(2, [3], 1)
-        model.setPhysicalName(2, 1, "RIGID_NODES")
-        model.addPhysicalGroup(2, [1,2], 2)
-        model.setPhysicalName(2, 2, "SURFACE")
-        # VOLUMES
-        model.addPhysicalGroup(3, [1], 1)
-        model.setPhysicalName(3, 1, "ALL_ELEMENTS")
-        # MESH CONTROL
-        model.mesh.field.add("Distance", 1)
-        model.mesh.field.setNumbers(1, "NodesList", [tip_point])
-        model.mesh.field.add("Threshold", 2);
-        model.mesh.field.setNumber(2, "IField", 1);
-        model.mesh.field.setNumber(2, "LcMin", lc1)
-        model.mesh.field.setNumber(2, "LcMax", lc2)
-        model.mesh.field.setNumber(2, "DistMin", r1)
-        model.mesh.field.setNumber(2, "DistMax", Rs)
-        model.mesh.field.setAsBackgroundMesh(2)
-        factory.synchronize()
-        if self.volumic: 
-            model.mesh.generate(3)
-            gmsh.write(self.file_name + ".msh")
-            if use_gui:
-                gmsh.fltk.run()
-            gmsh.finalize()
-            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
-            for eset in ["REF_NODE", 
-                         "TIP_NODE",
-                         "RIGID_NODES",
-                         "SURFACE"]:
-                mesh.element_set_to_node_set(eset)
-                del mesh.elements[("sets", eset, "")]
-            mesh.elements = mesh.elements[mesh.space() == 3]
-            mesh.node_set_to_surface("SURFACE")
-            if self.element_map != None:
-                mesh = self.element_map(mesh)
-            if self.material_map != None:
-                mesh = self.material_map(mesh)
-            self.mesh = mesh  
-        else:
-            model.mesh.generate(2)
-            gmsh.write(self.file_name + ".msh")
-            if use_gui:
-                gmsh.fltk.run()
-            gmsh.finalize()
-            mesh = argiope.mesh.read_msh(self.file_name + ".msh")
-            for eset in ["REF_NODE", 
-                         "TIP_NODE",
-                         "RIGID_NODES",
-                         "SURFACE"]:
-                mesh.element_set_to_node_set(eset)
-                #del mesh.elements[("sets", eset, "")]
-            mesh.elements = mesh.elements[mesh.elements.sets.SURFACE]
-            for eset in ["REF_NODE", 
-                         "TIP_NODE",
-                         "RIGID_NODES",
-                         "SURFACE"]:
-                del mesh.elements[("sets", eset, "")]
-            
-            #mesh.node_set_to_surface("SURFACE")
-            mesh.nodes[("sets", "RIGID_NODES")] = True
-            mesh.nodes[("sets", "REF_NODE")] = mesh.nodes.sets.TIP_NODE
-            mesh.elements[("sets", "ALL_ELEMENTS", "")] = True
-            mesh.elements[("surfaces", "SURFACE", "SPOS")] = True  
-            if self.element_map != None:
-                mesh = self.element_map(mesh)
-            if self.material_map != None:
-                mesh = self.material_map(mesh)
-            self.mesh = mesh      
-
-
 class SpheroconicalIndenter3D(Indenter3D):
     """
     A generic (full and partial) 3D spheroconical indenter class.
@@ -1147,10 +996,10 @@ class SpheroconicalIndenter3D(Indenter3D):
         outer_sphere = factory.addSphere(0., 0., 0., Rs)
         cut_tags = factory.intersect([(3, 1)], [(3, outer_sphere)], removeTool = True)
         # CUT
-        if cut: hd.models.cut_partial(model, keep, 2*Rs)
+        if cut: cut_partial(model, keep, 2*Rs)
         # ANALYZE
         factory.synchronize()
-        points, surfaces = hd.models.get_points_in_surfaces(model)
+        points, surfaces = get_points_in_surfaces(model)
         # POINTS
         points.sort_values("z", inplace = True)  
         top_point = points.index[-1]
@@ -1169,7 +1018,7 @@ class SpheroconicalIndenter3D(Indenter3D):
         model.setPhysicalName(2, 1, "RIGID_NODES")
         model.addPhysicalGroup(2, bottom_surf, 2)
         model.setPhysicalName(2, 2, "SURFACE")
-        if cut: hd.models.add_partial_physical_groups(model, keep)
+        if cut: add_partial_physical_groups(model, keep)
         # VOLUMES
         model.addPhysicalGroup(3, [1], 1)
         model.setPhysicalName(3, 1, "ALL_ELEMENTS")
@@ -1308,21 +1157,26 @@ class TransverseFiberSample3D(Sample):
         factory.addSphere(0., 0., 0., Rs, 5)
         factory.intersect([(3,3)], [(3,5)], 6, removeTool = False )
         factory.intersect([(3,4)], [(3,5)], 7, removeTool = True )
-        # WHY FRAGMENT ?: TO ENSURE COHERENCE BETWEEN THE TWO MESHES
-        out = factory.fragment( [(3,7)], [(3,6)], removeObject = True, removeTool = True)
+        
+        
 
-        # CREATE A POINT AT THE SURFACE IN (0, 0, 0)
+        
         # CUT
         if cut: 
-            hd.models.cut_partial(model, keep, 2*Rs)
+            cut_partial(model, keep, 2*Rs)
+            # WHY FRAGMENT ?: TO ENSURE COHERENCE BETWEEN THE TWO MESHES
+            out = factory.fragment( [(3,7)], [(3,6)], removeObject = True, removeTool = True)
         else:
+            # WHY FRAGMENT ?: TO ENSURE COHERENCE BETWEEN THE TWO MESHES
+            out = factory.fragment( [(3,7)], [(3,6)], removeObject = True, removeTool = True)
+            # CREATE A POINT AT THE SURFACE IN (0, 0, 0)
             contact_point = factory.addPoint(0., 0., 0.)
             factory.synchronize()
             model.mesh.embed(0, [contact_point], 2, 5)
             
         # MODEL ANALYSIS
         factory.synchronize()
-        points, surfaces = hd.models.get_points_in_surfaces(model)
+        points, surfaces = get_points_in_surfaces(model)
         contact_point = points[(points.x == 0.) & (points.y==0.) & (points.z==0.)].index[0]
         model.addPhysicalGroup(0, [contact_point], 1)
         model.setPhysicalName(0, 1, "CONTACT_POINT")    
@@ -1344,7 +1198,7 @@ class TransverseFiberSample3D(Sample):
         model.setPhysicalName(3, 1, "FIBER")
         model.addPhysicalGroup(3, [matrix], 2)
         model.setPhysicalName(3, 2, "MATRIX")
-        if cut: hd.models.add_partial_physical_groups(model, keep)
+        if cut: add_partial_physical_groups(model, keep)
         # MESH CONTROL
         top_point = factory.addPoint(0., 0., 0.)
         fiber_ext0 = factory.addPoint(-Rs, 0., 0.)
@@ -1464,9 +1318,9 @@ class Step2D:
                            FIELD_OUTPUT_FREQUENCY = self.field_output_frequency)                           
 
 
-class Step3DFull:
+class Step3D:
     """
-    A general purpose Full 3D indentation step.
+    A general purpose full and partial 3D indentation step.
     """
 
     # PATTERNS
@@ -1486,13 +1340,45 @@ class Step3DFull:
     I_INDENTER.REF_NODE, 4, 6
     I_INDENTER.REF_NODE, 3, 3, $CONTROLLED_VALUE
     """
+    
+    _BC_disp_control_cut = """
+    *BOUNDARY, OP=NEW
+    I_SAMPLE.BOTTOM, 1, 3
+    I_SAMPLE.AXIS, 1, 2
+    I_SAMPLE.CUT_SURFACE_0, 2, 2
+    I_SAMPLE.CUT_SURFACE_1, 2, 2
+    I_INDENTER.AXIS, 1, 2
+    I_INDENTER.CUT_SURFACE_0, 2, 2
+    I_INDENTER.CUT_SURFACE_1, 2, 2
+    I_INDENTER.REF_NODE, 1, 2
+    I_INDENTER.REF_NODE, 4, 6
+    I_INDENTER.REF_NODE, 3, 3, $CONTROLLED_VALUE
+    """
+    
     _BC_force_control = """
     *BOUNDARY, OP=NEW
-    I_SAMPLE.BOTTOM, 1, 2
+    I_SAMPLE.BOTTOM, 1, 3
+    I_INDENTER.REF_NODE, 1, 2
     I_INDENTER.REF_NODE, 4, 6
     *CLOAD
     I_INDENTER.REF_NODE, 3, $CONTROLLED_VALUE
     """
+    
+    _BC_force_control_cut = """
+    *BOUNDARY, OP=NEW
+    I_SAMPLE.BOTTOM, 1, 3
+    I_INDENTER.REF_NODE, 1, 2
+    I_INDENTER.REF_NODE, 4, 6
+    I_SAMPLE.AXIS, 1, 2
+    I_SAMPLE.CUT_SURFACE_0, 2, 2
+    I_SAMPLE.CUT_SURFACE_1, 2, 2
+    I_INDENTER.AXIS, 1, 1
+    I_INDENTER.CUT_SURFACE_0, 2, 2
+    I_INDENTER.CUT_SURFACE_1, 2, 2
+    *CLOAD
+    I_INDENTER.REF_NODE, 3, $CONTROLLED_VALUE
+    """
+    
     _step = """
     **------------------------------------------------------------------------------
     ** STEP: $NAME
@@ -1541,6 +1427,7 @@ class Step3DFull:
         min_frame_duration=1.0e-8,
         field_output_frequency=99999,
         solver="abaqus",
+        cut = False,
     ):
         self.control_type = control_type
         self.name = name
@@ -1551,6 +1438,7 @@ class Step3DFull:
         self.min_frame_duration = min_frame_duration
         self.field_output_frequency = field_output_frequency
         self.solver = solver
+        self.cut = cut
 
     def get_input(self):
         control_type = self.control_type
@@ -1581,10 +1469,16 @@ class Step3DFull:
                 )
             # BOUNDARY CONDITIONS:
             if control_type == "disp":
-                pattern = textwrap.dedent(self._BC_disp_control)
+                if self.cut:
+                    pattern = textwrap.dedent(self._BC_disp_control_cut)
+                else:
+                    pattern = textwrap.dedent(self._BC_disp_control)
                 BC = Template(pattern.strip())
             if control_type == "force":
-                pattern = textwrap.dedent(self._BC_force_control)
+                if self.cut:
+                    pattern = textwrap.dedent(self._BC_force_control_cut)
+                else:
+                    pattern = textwrap.dedent(self._BC_force_control)
                 BC = Template(pattern.strip())
             BC = BC.substitute(CONTROLLED_VALUE=controlled_value)
             out = Template(textwrap.dedent(self._step).strip())
@@ -1594,7 +1488,6 @@ class Step3DFull:
                 FIELD_OUTPUT_FREQUENCY=self.field_output_frequency,
                 NAME=name,
             )
-
 
 
 ################################################################################
@@ -1643,6 +1536,7 @@ def indentation_3D_full_input(
     element_map=None,
     solver="abaqus",
     make_mesh=True,
+    cut = False,
 ):
     """
   Returns a 3D full indentation input file.
@@ -1668,10 +1562,22 @@ def indentation_3D_full_input(
         *SOLID SECTION, ELSET=_MAT_MATRIX_MAT, MATERIAL=MATRIX_MAT, ORIENTATION=REF_FRAME
         *SOLID SECTION, ELSET=_MAT_FIBER_MAT, MATERIAL=FIBER_MAT, ORIENTATION=REF_FRAME
         """
+        if cut:
+            transform = """
+            *TRANSFORM, NSET=CUT_SURFACE_0, TYPE=C
+            0., 0., 0., 0., 0., 1.
+            *TRANSFORM, NSET=CUT_SURFACE_1, TYPE=C
+            0., 0., 0., 0., 0., 1.
+            """
+            transform = textwrap.dedent(transform).strip()
+        else:
+            transform = ""    
         pattern = pattern.substitute(
             SAMPLE_MESH= (sample_mesh.mesh.write_inp(sections = None) 
-                          + "\n" + textwrap.dedent(orientation).strip()),
-            INDENTER_MESH=indenter_mesh.mesh.write_inp(sections = sections),
+                          + "\n" + textwrap.dedent(orientation).strip()
+                          + "\n" + transform ),
+            INDENTER_MESH = (indenter_mesh.mesh.write_inp(sections = sections)
+                          + "\n" + transform),
             STEPS="".join([step.get_input() for step in steps]),
             MATERIALS="\n".join([m.write_inp() for m in materials]),
             FRICTION=friction,
