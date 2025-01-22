@@ -33,3 +33,10 @@ build/*
 hardness.egg-info/*
 dist/*
 
+doc/notebooks/fibre_indentation/.ipynb_checkpoints/indentation_2D_Fibre-checkpoint.ipynb
+doc/notebooks/fibre_indentation/.ipynb_checkpoints/indentation_2D_Fibre-checkpoint.ipynb
+doc/notebooks/fibre_indentation/workdir/*
+doc/notebooks/fibre_indentation/workdir/reports/*
+*frpt
+doc/notebooks/indentation/_workdir/model.pcklz
+doc/notebooks/indentation/_workdir/*

@@ -4,7 +4,7 @@ from abaqusConstants import *
 import visualization, xyPlot
 import displayGroupOdbToolset as dgo
 import __main__
-from argiope.abq import abqpostproc
+import abqpostproc
 
 # SETTINGS
 simName= "${simName}"

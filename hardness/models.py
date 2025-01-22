@@ -141,6 +141,7 @@ class Indentation2D(argiope.models.Model, argiope.utils.Container):
     Writes the prosproc scripts for the chosen solver.
     """
     if self.solver == "abaqus":
+      self.copy_abqpostproc()
       hardness.postproc.indentation_abqpostproc(
           path = "{0}/{1}_abqpp.py".format(
               self.workdir,
